@@ -9,7 +9,7 @@ def run_script(script_name):
     result = subprocess.run([sys.executable, script_name])
 
     if result.returncode != 0:
-        print(f"❌ Error running {script_name}")
+        print(f"Error running {script_name}")
         sys.exit(1)
     else:
         print(f"Completed: {script_name}")
@@ -28,3 +28,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
