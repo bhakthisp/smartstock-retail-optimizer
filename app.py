@@ -468,14 +468,14 @@ def run_xgboost_forecast(conn, cur):
         print(f"⚠️ Forecast error: {e}")
         return []
 def get_fresh_alerts_from_db(limit=1000):
-    """🔥 Get REAL latest alerts from sales table"""
+    """🔥 Get REAL latest alerts from sales table - FIXED!"""
     try:
         conn = get_db_conn_raw()
         cur = get_cursor(conn)
         cur.execute("""
             SELECT 
-                c.cityname, s.storename, storeid, p.productname,
-                sale_amount, stock, dt
+                c.cityname, s.storename, s.storeid, p.productname,  -- ✅ s.storeid FIXED!
+                sa.sale_amount, sa.stock, sa.dt
             FROM sales sa
             JOIN store s ON sa.storeid = s.storeid
             JOIN city c ON s.cityid = c.cityid
@@ -500,6 +500,7 @@ def get_fresh_alerts_from_db(limit=1000):
     except Exception as e:
         print(f"⚠️ DB alerts error: {e}")
         return []
+
 
 
 # ----------------------------
