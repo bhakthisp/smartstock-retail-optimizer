@@ -874,6 +874,23 @@ def get_alerts_api():
         alerts = list(reversed(combined))[-n:]
     return jsonify(alerts)
 
+@app.route("/restart-live")
+@login_required
+def restart_live():
+    if current_user.role != 'admin':
+        flash("❌ Admin only!", "danger")
+        return redirect(url_for('dashboard'))
+    
+    global live_thread
+    # 🔥 KILL + RESTART LIVE UPDATER
+    if live_thread and live_thread.is_alive():
+        print("🛑 Stopping old live thread...")
+    
+    start_live_updater_once()  # 🔥 RESTARTS IMMEDIATELY
+    
+    flash("🚀 Live updater RESTARTED! Check /debug", "success")
+    return redirect(url_for('debug'))
+
 
 @app.route("/toggle-theme")
 @login_required
