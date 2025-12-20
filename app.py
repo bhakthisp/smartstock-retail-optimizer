@@ -189,7 +189,11 @@ def ensure_tables_exist():
             
             print(f"📊 Found: {len(cities_df)} cities, {len(stores_df)} stores, {len(products_df)} products")
             try:
-                cur.execute("TRUNCATE TABLE sales, store, city, product RESTART IDENTITY CASCADE")
+                cur.execute("TRUNCATE TABLE sales RESTART IDENTITY")
+                cur.execute("TRUNCATE TABLE store RESTART IDENTITY") 
+                cur.execute("TRUNCATE TABLE city RESTART IDENTITY")
+                cur.execute("TRUNCATE TABLE product RESTART IDENTITY")
+                conn.commit()
             except:
                 cur.execute("TRUNCATE TABLE sales")
                 cur.execute("TRUNCATE TABLE store") 
@@ -206,9 +210,9 @@ def ensure_tables_exist():
             cur.execute("DELETE FROM city")
             conn.commit()
             for cityid, cityname in store_cities_df.items():
-                if cityid:
-                    cur.execute("INSERT INTO city (cityid, cityname) VALUES (%s, %s)", 
-                            (int(cityid), str(cityname).strip()))
+                cityid_int = int(cityid) if cityid is not None else 1
+                cur.execute("INSERT INTO city (cityid, cityname) VALUES (%s, %s) ON CONFLICT (cityid) DO NOTHING", 
+                            (cityid_int, str(cityname).strip()))
             conn.commit()
                 
             # 2. THEN cities.csv.xlsx as fallback
@@ -562,7 +566,7 @@ def my_store_dashboard():
     
     storeid = current_user.storeid
     # 🔥 FRESH DATA
-    fresh_db = get_fresh_alerts_from_db(limit=100)
+    fresh_db = get_fresh_alerts_from_db(limit=1000)
     all_store_alerts = [a for a in fresh_db + all_alerts if a.get('storeid') == storeid]
     alerts = list(reversed(all_store_alerts[-30:]))
     
@@ -778,7 +782,7 @@ def dashboard():
     else:
         # 🔥 ADMIN: Combine DB + Memory, take freshest 50
         combined_alerts = fresh_alerts + all_alerts
-        alerts = list(reversed(combined_alerts))[-50:]
+        alerts = list(reversed(combined_alerts))[-200:]
         title = "🌟 SmartStock Admin Dashboard"
         subtitle = f"All stores - {len(alerts)} live updates"
         my_store_link = None
@@ -820,7 +824,7 @@ def overstock_page():
         alerts = [a for a in reversed(combined_alerts) if "Overstock" in a['stock_alert']]
         page_title = f"All Stores - Overstock Alerts ({len(alerts)})"
     
-    return render_template("overstock.html", alerts=alerts[-20:], title=page_title, user=current_user)
+    return render_template("overstock.html", alerts=alerts[-200:], title=page_title, user=current_user)
 
 @app.route("/understock")
 @login_required
@@ -837,7 +841,7 @@ def understock_page():
         alerts = [a for a in reversed(combined_alerts) if "Restock" in a['stock_alert']]
         page_title = f"All Stores - Understock Alerts ({len(alerts)})"
     
-    return render_template("understock.html", alerts=alerts[-20:], title=page_title, user=current_user)
+    return render_template("understock.html", alerts=alerts[-200:], title=page_title, user=current_user)
 
 @app.route("/ok-stock")
 @login_required
@@ -854,7 +858,7 @@ def ok_stock_page():
         alerts = [a for a in reversed(combined_alerts) if "Stock OK" in a['stock_alert']]
         page_title = f"All Stores - Stock OK ({len(alerts)})"
     
-    return render_template("ok_stock.html", alerts=alerts[-20:], title=page_title, user=current_user)
+    return render_template("ok_stock.html", alerts=alerts[-200:], title=page_title, user=current_user)
 
 @app.route("/api/alerts")
 @login_required
