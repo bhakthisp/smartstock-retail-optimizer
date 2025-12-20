@@ -323,7 +323,11 @@ def live_updater_background():
             product_row = random.choice(products)
             storeid, storename, cityid = store_row
             productid, productname = product_row
-            cityname = cities.get(cityid, f"City_{cityid}")  # ✅ SAFE!
+           # 🔥 FIX: Get cityname from store's cityid
+            cur.execute("SELECT cityname FROM city WHERE cityid=%s", (cityid,))
+            city_result = cur.fetchone()
+            cityname = city_result[0] if city_result else f"City_{cityid}"
+
             sale_amount = random.randint(2, 15)
             cur.execute(
                 "SELECT stock FROM sales WHERE storeid=%s AND productid=%s ORDER BY dt DESC LIMIT 1",
@@ -606,7 +610,7 @@ def admin_stores():
             SELECT storeid, storename, store_manager, password, cityid 
             FROM store 
             WHERE storename LIKE %s OR store_manager LIKE %s
-            ORDER BY storeid
+            ORDER BY storeid ASC
         """, (f'%{search}%', f'%{search}%'))
     else:
         cursor.execute("SELECT storeid, storename, store_manager, password, cityid FROM store ORDER BY storeid")
@@ -680,7 +684,7 @@ def city_stores_page(cityid):
             SELECT storeid, storename, cityid 
             FROM store 
             WHERE cityid=:cid 
-            ORDER BY storename
+            ORDER BY storeid ASC
         """), engine, params={"cid": cityid})
         
         city_df = pd.read_sql(text("SELECT cityname FROM city WHERE cityid=:cid"), engine, params={"cid": cityid})
