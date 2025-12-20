@@ -873,6 +873,33 @@ def get_alerts_api():
     else:
         alerts = list(reversed(combined))[-n:]
     return jsonify(alerts)
+@app.route("/admin/fix-mumbai", methods=["GET"])
+@login_required
+def fix_mumbai_stores():
+    if current_user.role != 'admin':
+        flash("Admin only!", "danger")
+        return redirect(url_for('dashboard'))
+    
+    conn = get_db_conn_raw()
+    cur = get_cursor(conn)
+    
+    # 1. Ensure Mumbai cityid=0 exists
+    cur.execute("INSERT INTO city (cityid, cityname) VALUES (0, 'Mumbai') ON CONFLICT (cityid) DO NOTHING")
+    
+    # 2. MOVE Mumbai stores to cityid=0
+    cur.execute("""
+        UPDATE store 
+        SET cityid=0 
+        WHERE storename LIKE '%Mumbai%' OR storename LIKE 'Mumbai -%'
+    """)
+    moved_count = cur.rowcount
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    
+    flash(f"✅ FIXED! Moved {moved_count} Mumbai stores to Mumbai city!", "success")
+    return redirect(url_for('cities_page'))
 
 
 @app.route("/toggle-theme")
