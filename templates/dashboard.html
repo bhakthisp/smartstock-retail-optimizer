@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Dashboard - SmartStock{% endblock %}
 {% block content %}
+<meta http-equiv="refresh" content="15">
 <div class="row mb-5">
     <div class="col-12">
         <h1 class="display-5 fw-bold mb-1"><i class="fas fa-chart-dashboard text-primary"></i> Live Dashboard</h1>
@@ -139,17 +140,6 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // LIVE AUTO-REFRESH (15 seconds)
-    setInterval(function() {
-        fetch('/api/alerts?n=50')
-            .then(response => response.json())
-            .then(data => {
-                updateTable(data.slice(-10));  // Show last 10
-                updateCounters(data);
-            })
-            .catch(error => console.log('Refresh error:', error));
-    }, 15000);
-
     function updateTable(alerts) {
         const tbody = document.getElementById('alerts-table');
         tbody.innerHTML = '';
@@ -157,7 +147,7 @@
             tbody.innerHTML = '<tr><td colspan="8" class="text-center p-4">No recent alerts</td></tr>';
             return;
         }
-        alerts.forEach(alert => {
+        alerts.slice(0,20).forEach(alert => {  // ✅ TOP 20
             const row = tbody.insertRow();
             row.className = alert.stock_alert?.includes('Restock Needed') ? 'table-danger' : 
                            alert.stock_alert?.includes('Overstock') ? 'table-warning' : 'table-success';
@@ -171,15 +161,15 @@
                 <td>
                     <span class="badge fs-6 fw-semibold 
                         ${alert.stock_alert?.includes('Restock Needed') ? 'bg-danger' : 
-                          alert.stock_alert?.includes('Overstock') ? 'bg-warning text-dark' : 'bg-success'}">
+                        alert.stock_alert?.includes('Overstock') ? 'bg-warning text-dark' : 'bg-success'}">
                         ${alert.stock_alert || 'OK'}
                     </span>
                 </td>
                 <td>
                     ${alert.forecast ? 
-                      (alert.forecast.includes('Restock') ? '<span class="badge bg-danger">🔴 Restock</span>' : 
-                       '<span class="badge bg-success">🟢 OK</span>') : 
-                      '<span class="badge bg-secondary">N/A</span>'
+                     (alert.forecast.includes('Restock') ? '<span class="badge bg-danger">🔴 Restock</span>' : 
+                     '<span class="badge bg-success">🟢 OK</span>') : 
+                     '<span class="badge bg-secondary">N/A</span>'
                     }
                 </td>
             `;
@@ -196,5 +186,22 @@
         document.getElementById('okstock-count').textContent = okstock;
         document.getElementById('total-count').textContent = alerts.length;
     }
+
+    // 🔥 AUTO UPDATE EVERY 15s + START IMMEDIATELY
+    setInterval(function() {
+        fetch('/api/alerts?n=50')
+            .then(response => response.json())
+            .then(data => {
+                updateTable(data);      // ✅ FIXED
+                updateCounters(data);   // ✅ FIXED
+            })
+            .catch(error => console.log('Update error:', error));
+    }, 15000);
+
+    // 🔥 LOAD FIRST DATA IMMEDIATELY
+    fetch('/api/alerts?n=50').then(r=>r.json()).then(data => {
+        updateTable(data); updateCounters(data);
+    });
 </script>
 {% endblock %}
+

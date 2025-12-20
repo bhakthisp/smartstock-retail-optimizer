@@ -408,10 +408,11 @@ def live_updater_background():
                 all_alerts = all_alerts[-10000:]
 
             print(f"[{alert['timestamp']}] {alert['city']} / {alert['store']} / {alert['product']} → {alert['stock_alert']} | {alert['forecast']}")
-
+            time.sleep(15) 
     finally:
         cur.close()
         conn.close()
+
 def run_xgboost_forecast(conn, cur):
     global all_forecasts
     try:
