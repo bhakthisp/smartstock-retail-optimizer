@@ -342,11 +342,11 @@ def live_updater_background():
             activity_flag = random.choice([0,1])
             hour = now.hour
 
-                        # 🔥 1. IST TIME FIRST
-            now_utc = datetime.now()
+            # CORRECT ✅
+            now_utc = datetime.now(timezone.utc)  # TRUE UTC
             ist_offset = timedelta(hours=5, minutes=30)
-            now_ist = now_utc + ist_offset
-            hour = now_ist.hour
+            now_ist = now_utc + ist_offset        # Proper IST
+
 
             # 🔥 2. INSERT SALE with IST TIME
             cur.execute("""
@@ -463,7 +463,7 @@ def run_xgboost_forecast(conn, cur):
     except Exception as e:
         print(f"⚠️ Forecast error: {e}")
         return []
-def get_fresh_alerts_from_db(limit=100):
+def get_fresh_alerts_from_db(limit=1000):
     """🔥 Get REAL latest alerts from sales table"""
     try:
         conn = get_db_conn_raw()
@@ -885,9 +885,10 @@ def start_live_updater_once():
     if live_thread is None or not live_thread.is_alive():
         live_thread = threading.Thread(target=live_updater_background, daemon=True)
         live_thread.start()
-        print("🚀 Live updater started! (SINGLE THREAD)")
-        # RENDER RESTART TIMER
+        print("🚀 Live updater restarted!")
+        # 🔥 HEARTBEAT: Restart every 5min
         threading.Timer(300.0, start_live_updater_once).start()
+
 
 def init_app():
     with app.app_context():
@@ -906,7 +907,6 @@ def debug():
 
 
 if __name__ == "__main__":
-    start_live_updater_once()  # ✅ SINGLE CALL
     port = int(os.environ.get('PORT', 5000))
     host = os.environ.get('HOST', '0.0.0.0')
     debug = os.environ.get('DEBUG', 'True').lower() == 'true'
