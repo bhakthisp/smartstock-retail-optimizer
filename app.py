@@ -223,10 +223,10 @@ def ensure_tables_exist():
 
             
             # 2. STORES (YOUR COLUMN ORDER: store_id, city_id, store_name, city_name, store_manager, password)
-            # 2. STORES - DEBUG VERSION (REPLACED)
+           # 2. STORES - PERFECT city_id FROM stores.xlsx
             cur.execute("SELECT cityid, cityname FROM city")
             city_map = dict(cur.fetchall())
-            print(f"🏙️ City map: {list(city_map.items())[:3]}...")  # DEBUG
+            print(f"🏙️ City map: {list(city_map.items())[:3]}...")
 
             successful_stores = 0
             failed_stores = 0
@@ -236,13 +236,14 @@ def ensure_tables_exist():
                 password = str(row['password'])
                 cityid_raw = row['city_id']
                 
-                # 🔥 FORCE ALL STORES TO LOAD
+                # ✅ PERFECT: EXACT city_id (0=Mumbai, 1=Delhi)
                 try:
-                    cityid = int(cityid_raw) if cityid_raw else 1
-                except:
+                    cityid = int(cityid_raw)
+                    print(f"📍 {storename} → cityid={cityid}")
+                except (ValueError, TypeError):
                     cityid = 1
+                    print(f"⚠️ {storename} bad city_id={cityid_raw} → 1")
                 
-                # 🔥 LOAD EVEN IF manager empty - use store name
                 if storename:
                     try:
                         cur.execute("""
@@ -252,12 +253,10 @@ def ensure_tables_exist():
                         successful_stores += 1
                     except Exception as e:
                         failed_stores += 1
-                        if failed_stores < 5:  # Show first 5 errors
-                            print(f"❌ Store {idx} failed: {e}")
-                else:
-                    failed_stores += 1
+                        if failed_stores < 5:
+                            print(f"❌ Store {idx}: {e}")
 
-            conn.commit()
+            conn.commit()  # ← OUTSIDE LOOP!
             print(f"✅ STORES: {successful_stores} loaded, {failed_stores} failed")
             print(f"🏪 Sample stores: {successful_stores > 0 and 'YES' or 'NO'}")
 
@@ -874,33 +873,6 @@ def get_alerts_api():
     else:
         alerts = list(reversed(combined))[-n:]
     return jsonify(alerts)
-@app.route("/admin/fix-mumbai", methods=["GET"])
-@login_required
-def fix_mumbai_stores():
-    if current_user.role != 'admin':
-        flash("Admin only!", "danger")
-        return redirect(url_for('dashboard'))
-    
-    conn = get_db_conn_raw()
-    cur = get_cursor(conn)
-    
-    # 1. Ensure Mumbai cityid=0 exists
-    cur.execute("INSERT INTO city (cityid, cityname) VALUES (0, 'Mumbai') ON CONFLICT (cityid) DO NOTHING")
-    
-    # 2. MOVE Mumbai stores to cityid=0
-    cur.execute("""
-        UPDATE store 
-        SET cityid=0 
-        WHERE storename LIKE '%Mumbai%' OR storename LIKE 'Mumbai -%'
-    """)
-    moved_count = cur.rowcount
-    
-    conn.commit()
-    cur.close()
-    conn.close()
-    
-    flash(f"✅ FIXED! Moved {moved_count} Mumbai stores to Mumbai city!", "success")
-    return redirect(url_for('cities_page'))
 
 
 @app.route("/toggle-theme")
