@@ -762,7 +762,7 @@ def store_products_page(storeid):
 @login_required
 def dashboard():
     # 🔥 FORCE FRESH DATA - Read LAST 50 from DB + MEMORY
-    fresh_alerts = get_fresh_alerts_from_db(limit=100)  # NEW FUNCTION
+    fresh_alerts = get_fresh_alerts_from_db(limit=1000)  # NEW FUNCTION
     
     if current_user.role == 'store_manager':
         user_storeid = current_user.storeid
@@ -805,7 +805,7 @@ def dashboard():
 @login_required
 def overstock_page():
     # 🔥 FRESH DATA FROM DB + MEMORY
-    fresh_db = get_fresh_alerts_from_db(limit=200)
+    fresh_db = get_fresh_alerts_from_db(limit=1000)
     combined_alerts = fresh_db + all_alerts
     
     if current_user.role == 'store_manager':
@@ -822,7 +822,7 @@ def overstock_page():
 @login_required
 def understock_page():
     # 🔥 FRESH DATA FROM DB + MEMORY  
-    fresh_db = get_fresh_alerts_from_db(limit=200)
+    fresh_db = get_fresh_alerts_from_db(limit=1000)
     combined_alerts = fresh_db + all_alerts
     
     if current_user.role == 'store_manager':
@@ -839,7 +839,7 @@ def understock_page():
 @login_required
 def ok_stock_page():
     # 🔥 FRESH DATA FROM DB + MEMORY
-    fresh_db = get_fresh_alerts_from_db(limit=200)
+    fresh_db = get_fresh_alerts_from_db(limit=1000)
     combined_alerts = fresh_db + all_alerts
     
     if current_user.role == 'store_manager':
@@ -856,7 +856,7 @@ def ok_stock_page():
 @login_required
 def get_alerts_api():
     n = int(request.args.get("n", 200))
-    fresh_db = get_fresh_alerts_from_db(limit=n*2)  # 🔥 FRESH!
+    fresh_db = get_fresh_alerts_from_db(limit=1000)  # 🔥 FIXED: Always 1000
     combined = fresh_db + all_alerts
     
     if current_user.role == 'store_manager':
