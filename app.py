@@ -743,11 +743,13 @@ def admin_users():
     if current_user.role != 'admin':
         flash("❌ Admin only!", "danger")
         return redirect(url_for('dashboard'))
+    
     conn = get_db_conn_raw()
     cursor = get_cursor(conn)
     cursor.execute("""
         SELECT DISTINCT username, role, COUNT(*) as login_count,
-               MIN(login_time) as first_login, MAX(login_time) as last_login
+               MIN(login_time) AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata' as first_login,
+               MAX(login_time) AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata' as last_login
         FROM login_logs 
         WHERE success = TRUE
         GROUP BY username, role 
@@ -756,41 +758,53 @@ def admin_users():
     user_stats = cursor.fetchall()
     cursor.close()
     conn.close()
+    
     html = f"""
     <div style='max-width:1200px; margin:20px auto; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;'>
-        <h2 style='color:#0d6efd;'>👥 Active Users ({len(user_stats)})</h2>
-        <div style='background:white; border-radius:8px; box-shadow:0 0 20px rgba(0,0,0,0.1); overflow:hidden;'>
+        <h2 style='color:#0d6efd; margin-bottom:20px;'>👥 Active Users (<span style='color:#198754;'>{len(user_stats)}</span>)</h2>
+        <div style='background:white; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,0.1); overflow:hidden;'>
             <table style='width:100%; border-collapse:collapse;'>
-                <thead><tr style='background:#0d6efd; color:white;'>
-                    <th style='padding:15px;'>User</th>
-                    <th style='padding:15px;'>Role</th>
-                    <th style='padding:15px;'>Logins</th>
-                    <th style='padding:15px;'>First Login</th>
-                    <th style='padding:15px;'>Last Login</th>
-                </tr></thead><tbody>
+                <thead>
+                    <tr style='background:linear-gradient(135deg,#0d6efd,#1e88e5); color:white;'>
+                        <th style='padding:18px 15px; text-align:left; font-weight:600; width:25%;'>User</th>
+                        <th style='padding:18px 15px; text-align:left; font-weight:600; width:20%;'>Role</th>
+                        <th style='padding:18px 15px; text-align:center; font-weight:600; width:15%;'>Logins</th>
+                        <th style='padding:18px 15px; text-align:center; font-weight:600; width:20%;'>First Login</th>
+                        <th style='padding:18px 15px; text-align:center; font-weight:600; width:20%;'>Last Login</th>
+                    </tr>
+                </thead>
+                <tbody>
     """
+    
     for row in user_stats:
-        role_color = "#198754" if row[1] == 'admin' else "#0dcaf0"
+        username, role, login_count, first_login, last_login = row
+        role_color = "#198754" if role == 'admin' else "#0dcaf0"
+        
         html += f"""
-            <tr style='border-bottom:1px solid #dee2e6;'>
-                <td style='padding:15px; font-weight:600;'>{row[0]}</td>
-                <td style='padding:15px;'><span style='background:{role_color};color:white;padding:4px 8px;border-radius:12px;'>{row[1]}</span></td>
-                <td style='padding:15px;'>{row[2]}</td>
-                <td style='padding:15px;'>{row[3].strftime('%Y-%m-%d')}</td>
-                <td style='padding:15px; font-weight:500;'>{row[4].strftime('%H:%M:%S')}</td>
+            <tr style='border-bottom:2px solid #f8f9fa;'>
+                <td style='padding:20px 15px; font-weight:700; color:#1f2937; font-size:15px;'>{username}</td>
+                <td style='padding:20px 15px; text-align:center;'>
+                    <span style='background:{role_color}; color:white; padding:8px 16px; border-radius:20px; font-weight:600; font-size:13px; min-width:100px; display:inline-block;'>{role}</span>
+                </td>
+                <td style='padding:20px 15px; text-align:center; font-weight:700; color:#059669; font-size:16px; background:#f0fdf4; border-radius:8px; width:15%;'>{login_count}</td>
+                <td style='padding:20px 15px; text-align:center; color:#6b7280; font-size:14px;'>{first_login.strftime('%Y-%m-%d')}</td>
+                <td style='padding:20px 15px; text-align:center; font-weight:600; color:#0d6efd; font-size:14px;'>{last_login.strftime('%H:%M:%S')}</td>
             </tr>
         """
+    
     html += """
-                </tbody></table>
-            </div>
-            <div style='margin-top:20px;'>
-                <a href='/admin/login-logs' style='background:#198754;color:white;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:10px;'>📊 Full Login Logs</a>
-                <a href='/admin/stores' style='background:#0d6efd;color:white;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:10px;'>🏪 Store Managers</a>
-                <a href='/dashboard' style='background:#6c757d;color:white;padding:10px 20px;text-decoration:none;border-radius:6px;'>← Dashboard</a>
-            </div>
+                </tbody>
+            </table>
         </div>
+        <div style='margin-top:25px; text-align:center;'>
+            <a href='/admin/login-logs' style='background:linear-gradient(135deg,#198754,#146c43); color:white; padding:12px 24px; text-decoration:none; border-radius:10px; margin-right:15px; font-weight:600; box-shadow:0 4px 15px rgba(25,135,84,0.3);'>📊 Full Login Logs</a>
+            <a href='/admin/stores' style='background:linear-gradient(135deg,#0d6efd,#1e88e5); color:white; padding:12px 24px; text-decoration:none; border-radius:10px; margin-right:15px; font-weight:600; box-shadow:0 4px 15px rgba(13,110,253,0.3);'>🏪 Store Managers</a>
+            <a href='/dashboard' style='background:linear-gradient(135deg,#6c757d,#5a6268); color:white; padding:12px 24px; text-decoration:none; border-radius:10px; font-weight:600; box-shadow:0 4px 15px rgba(108,117,125,0.3);'>← Dashboard</a>
+        </div>
+    </div>
     """
     return html
+
 @app.route("/")
 @login_required
 def dashboard():
