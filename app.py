@@ -1063,27 +1063,22 @@ def product_history_page():
 def history_search():
     if current_user.role != 'admin':
         return jsonify({"error": "Admin only!"}), 403
+    
     try:
         date_from = request.args.get("date_from")
         date_to = request.args.get("date_to", date_from)
         city = request.args.get("city", "").strip()
-        store = request.args.get("store", "").strip()
+        store = request.args.get("store", "").strip()  # ← STORE NAME!
         product = request.args.get("product", "").strip()
         
-        params = {"sid": store} if store else {}
-        where_clauses = []
-        
+        params = {}
         sql = """
         SELECT 
-            s.timestamp,
-            s.storeid, st.storename, c.cityname,
-            s.productid, p.productname,
-            s.stock, s.sale_amount,
-            CASE 
-                WHEN s.stock < 5 THEN '🔴 Low Stock'
-                WHEN s.stock > 40 THEN '🟡 Overstock'
-                ELSE '🟢 OK'
-            END as stock_status
+            s.timestamp, s.storeid, st.storename, c.cityname,
+            s.productid, p.productname, s.stock, s.sale_amount,
+            CASE WHEN s.stock < 5 THEN '🔴 Low Stock'
+                 WHEN s.stock > 40 THEN '🟡 Overstock'
+                 ELSE '🟢 OK' END as stock_status
         FROM sales s
         JOIN store st ON s.storeid = st.storeid
         JOIN city c ON st.cityid = c.cityid
@@ -1091,30 +1086,51 @@ def history_search():
         WHERE 1=1
         """
         
-        if date_from:
-            sql += " AND DATE(s.timestamp) >= :date_from"
-            params["date_from"] = date_from
-        if date_to:
-            sql += " AND DATE(s.timestamp) <= :date_to"
-            params["date_to"] = date_to
-        if city:
-            sql += " AND c.cityname ILIKE :city"
-            params["city"] = f"%{city}%"
-        if store:
-            sql += " AND s.storeid = :sid"
-            params["sid"] = int(store)
-        if product:
-            sql += " AND p.productname ILIKE :product"
-            params["product"] = f"%{product}%"
-            
-        sql += " ORDER BY s.timestamp DESC LIMIT 100"
+        if date_from: sql += " AND DATE(s.timestamp) >= :date_from"; params["date_from"] = date_from
+        if date_to:   sql += " AND DATE(s.timestamp) <= :date_to"; params["date_to"] = date_to
+        if city:      sql += " AND c.cityname ILIKE :city"; params["city"] = f"%{city}%"
+        if store:     sql += " AND st.storename ILIKE :store_name"; params["store_name"] = f"%{store}%"
+        if product:   sql += " AND p.productname ILIKE :product"; params["product"] = f"%{product}%"
         
+        sql += " ORDER BY s.timestamp DESC LIMIT 100"
         df = pd.read_sql(text(sql), engine, params=params)
         return jsonify(df.to_dict('records'))
-        
     except Exception as e:
         print(f"❌ History search error: {e}")
         return jsonify({"error": str(e)}), 500
+
+    
+@app.route("/api/cities")
+def api_cities():
+    search = request.args.get("search", "").lower()
+    df = pd.read_sql(text("""
+        SELECT cityname, COUNT(storeid) as store_count 
+        FROM city c LEFT JOIN store s ON c.cityid = s.cityid 
+        GROUP BY cityname 
+        HAVING LOWER(cityname) LIKE :search
+        ORDER BY cityname
+    """), engine, params={"search": f"%{search}%"})
+    return jsonify(df.to_dict('records'))
+
+@app.route("/api/stores-by-city")
+def api_stores_by_city():
+    city = request.args.get("city", "")
+    df = pd.read_sql(text("""
+        SELECT storeid, storename 
+        FROM store s JOIN city c ON s.cityid = c.cityid 
+        WHERE c.cityname ILIKE :city
+    """), engine, params={"city": f"%{city}%"})
+    return jsonify(df.to_dict('records'))
+
+@app.route("/api/store-products")
+def api_store_products():
+    storeid = request.args.get("storeid")
+    df = pd.read_sql(text("""
+        SELECT DISTINCT productid, productname 
+        FROM product p JOIN sales s ON p.productid = s.productid 
+        WHERE s.storeid = :storeid
+    """), engine, params={"storeid": int(storeid)})
+    return jsonify(df.to_dict('records'))
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
