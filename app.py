@@ -767,7 +767,7 @@ def admin_users():
                 <thead>
                     <tr style='background:linear-gradient(135deg,#0d6efd,#1e88e5); color:white;'>
                         <th style='padding:18px 15px; text-align:left; font-weight:600; width:25%;'>User</th>
-                        <th style='padding:18px 15px; text-align:left; font-weight:600; width:20%;'>Role</th>
+                        <th style='padding:18px 15px; text-align:left; font-weight:600; width:20%;'>     Role</th>
                         <th style='padding:18px 15px; text-align:center; font-weight:600; width:15%;'>Logins</th>
                         <th style='padding:18px 15px; text-align:center; font-weight:600; width:20%;'>First Login</th>
                         <th style='padding:18px 15px; text-align:center; font-weight:600; width:20%;'>Last Login</th>
