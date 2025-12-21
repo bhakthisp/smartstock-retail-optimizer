@@ -148,6 +148,23 @@ def ensure_tables_exist():
             )
         """)
         conn.commit()  # 🔥 CRITICAL
+        # 🔥 LOGIN LOGS TABLE - NEW!
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS login_logs (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                role VARCHAR(20),
+                storeid INT,
+                storename VARCHAR(50),
+                ip_address INET,
+                user_agent TEXT,
+                success BOOLEAN NOT NULL,
+                login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                cityid INT
+            )
+        """)
+        conn.commit()
+        print("✅ Login logs table created")
 
         # 🔥 CONSTRAINT with transaction isolation
         try:
@@ -318,7 +335,7 @@ def live_updater_background():
             cities = {1: 'Demo City'}
     
         print("🚀 Live updater LOOP STARTED! (15s)")
-        SALE_INTERVAL = 15
+        SALE_INTERVAL = 30
         
         while True:
             now = datetime.now()
@@ -508,49 +525,75 @@ def get_fresh_alerts_from_db(limit=1000):
 # ----------------------------
 @app.route("/login", methods=["GET","POST"])
 def login():
-    ensure_tables_exist()  # 🔥 TABLES FIRST!
+    ensure_tables_exist()
     if request.method=="POST":
         username = request.form.get("username")
         password = request.form.get("password")
-        print(f"🔓 LOGIN ATTEMPT: {username}/{password}")
+        client_ip = request.remote_addr or "0.0.0.0"
+        user_agent = request.headers.get("User-Agent", "Unknown")
         
-        # ADMIN LOGIN FIRST (NO DB NEEDED)
-        if username == "admin" and password == "admin123":
-            print("✅ ADMIN LOGIN SUCCESS!")
-            session['user_data'] = {
-                'id': 1,
-                'username': 'admin',
-                'role': 'admin'
-            }
-            user_obj = User(**session['user_data'])
-            login_user(user_obj)
-            return redirect(url_for('dashboard'))
+        print(f"🔓 LOGIN ATTEMPT: {username}/{password} from {client_ip}")
         
-        # STORE MANAGER LOGIN
         conn = get_db_conn_raw()
         cursor = get_cursor(conn)
-        cursor.execute("SELECT storeid, storename, store_manager, cityid FROM store WHERE store_manager = %s AND password = %s", (username, password))
-        store_user = cursor.fetchone()
         
-        if store_user:
-            print(f"✅ STORE MANAGER LOGIN: {username}")
+        # 🔥 LOG EVERY ATTEMPT
+        try:
+            cursor.execute("""
+                INSERT INTO login_logs (username, ip_address, user_agent, success, role) 
+                VALUES (%s, %s, %s, FALSE, 'unknown')
+            """, (username, client_ip, user_agent))
+            conn.commit()
+            log_id = cursor.lastrowid
+        except:
+            log_id = None
+        
+        success = False
+        role = None
+        storeid = None
+        storename = None
+        cityid = None
+        
+        # ADMIN
+        if username == "admin" and password == "admin123":
+            success = True
+            role = 'admin'
+            
+        # STORE MANAGER
+        else:
+            cursor.execute("SELECT storeid, storename, store_manager, cityid FROM store WHERE store_manager = %s AND password = %s", (username, password))
+            store_user = cursor.fetchone()
+            if store_user:
+                success = True
+                role = 'store_manager'
+                storeid = store_user[0]
+                storename = store_user[1]
+                cityid = store_user[3]
+        
+        # 🔥 UPDATE LOG WITH SUCCESS
+        if log_id and success:
+            cursor.execute("""
+                UPDATE login_logs 
+                SET success=TRUE, role=%s, storeid=%s, storename=%s, cityid=%s 
+                WHERE id=%s
+            """, (role, storeid, storename, cityid, log_id))
+            conn.commit()
+        
+        conn.close()
+        
+        if success:
             session['user_data'] = {
-                'id': store_user[0],  # storeid
-                'username': store_user[2],  # store_manager
-                'role': 'store_manager',
-                'storeid': store_user[0],
-                'storename': store_user[1],
-                'cityid': store_user[3]
+                'id': storeid or 1, 'username': username, 'role': role,
+                'storeid': storeid, 'storename': storename, 'cityid': cityid
             }
             user_obj = User(**session['user_data'])
             login_user(user_obj)
-            conn.close()
             return redirect(url_for('dashboard'))
-        
-        conn.close()
-        flash("Invalid credentials!", "danger")
+        else:
+            flash("Invalid credentials!", "danger")
     
     return render_template("login.html")
+
 @app.route("/logout")
 @login_required
 def logout():
@@ -635,14 +678,87 @@ def admin_stores():
     conn.close()
     
     return render_template("admin_stores.html", stores=stores, search=search, user=current_user)
-
-@app.route("/admin/users")
+@app.route("/admin/login-logs")
 @login_required
-def admin_users():
+def admin_login_logs():
     if current_user.role != 'admin':
-        flash("❌ Store managers cannot access confidential admin pages!", "danger")
+        flash("❌ Admin only!", "danger")
         return redirect(url_for('dashboard'))
-    return render_template("admin_users.html", user=current_user)
+    
+    conn = get_db_conn_raw()
+    cursor = get_cursor(conn)
+    cursor.execute("SELECT id, username, role, storeid, storename, ip_address, success, login_time, cityid FROM login_logs ORDER BY login_time DESC LIMIT 1000")
+    logs = []
+    for row in cursor.fetchall():
+        logs.append({
+            'id': row[0], 'username': row[1], 'role': row[2], 
+            'storeid': row[3], 'storename': row[4], 'ip': row[5],
+            'success': row[6], 'time': row[7].strftime("%Y-%m-%d %H:%M:%S"),
+            'cityid': row[8]
+        })
+    cursor.close()
+    conn.close()
+    return render_template("admin_login_logs.html", logs=logs, user=current_user)
+
+@app.route("/admin/login-logs")
+@login_required
+def admin_login_logs():
+    if current_user.role != 'admin':
+        flash("❌ Admin only!", "danger")
+        return redirect(url_for('dashboard'))
+    
+    conn = get_db_conn_raw()
+    cursor = get_cursor(conn)
+    cursor.execute("SELECT id, username, role, storeid, storename, ip_address, success, login_time, cityid FROM login_logs ORDER BY login_time DESC LIMIT 50")
+    logs_raw = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    # 🔥 PERFECT MATCH TO YOUR UI COLORS
+    html = """
+    <div style='max-width:1200px; margin:20px auto; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;'>
+        <h2 style='color:#0d6efd; margin-bottom:20px;'>📊 Login Logs (<span style='color:#198754;'>""" + str(len(logs_raw)) + """</span>)</h2>
+        <div style='background:white; border-radius:8px; box-shadow:0 0 20px rgba(0,0,0,0.1); overflow:hidden;'>
+            <table style='width:100%; border-collapse:collapse;'>
+                <thead>
+                    <tr style='background:#0d6efd; color:white;'>
+                        <th style='padding:15px; text-align:left;'>Time</th>
+                        <th style='padding:15px; text-align:left;'>User</th>
+                        <th style='padding:15px; text-align:left;'>Role</th>
+                        <th style='padding:15px; text-align:left;'>Store</th>
+                        <th style='padding:15px; text-align:left;'>IP</th>
+                        <th style='padding:15px; text-align:left;'>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+    """
+    
+    for row in logs_raw:
+        status = "✅ SUCCESS" if row[6] else "❌ FAILED"
+        status_color = "#d1e7dd; color:#0f5132;" if row[6] else "#f8d7da; color:#721c24;"
+        role_color = "#0dcaf0" if row[2] == 'store_manager' else "#198754"
+        
+        html += f"""
+                    <tr style='border-bottom:1px solid #dee2e6;'>
+                        <td style='padding:15px;'>{row[7]}</td>
+                        <td style='padding:15px; font-weight:600;'>{row[1]}</td>
+                        <td style='padding:15px;'><span style='background:{role_color}; color:white; padding:4px 8px; border-radius:12px; font-size:12px;'>{row[2]}</span></td>
+                        <td style='padding:15px;'>{row[4] or '-'}</td>
+                        <td style='padding:15px;'>{row[5]}</td>
+                        <td style='padding:15px;'><span style='background:{status_color} padding:4px 8px; border-radius:12px; font-weight:600;'>{status}</span></td>
+                    </tr>
+        """
+    
+    html += """
+                </tbody>
+            </table>
+        </div>
+        <div style='margin-top:20px;'>
+            <a href='/dashboard' style='background:#6c757d; color:white; padding:10px 20px; text-decoration:none; border-radius:6px; font-weight:500;'>← Back to Dashboard</a>
+        </div>
+    </div>
+    """
+    return html
 
 @app.route("/cities")
 @login_required
