@@ -256,6 +256,27 @@ def ensure_tables_exist():
     finally:
         if cur: cur.close()
         if conn: conn.close()
+def ensure_sales_timestamp():
+    """Add created_at + backfill ALL existing records"""
+    try:
+        pd.read_sql(text("SELECT created_at FROM sales LIMIT 1"), engine)
+        print("✅ sales.created_at exists!")
+        return
+    except:
+        print("🔧 Creating created_at column + backfilling...")
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE sales ADD COLUMN created_at TIMESTAMP;"))
+            # 🔥 BACKFILL: id → approximate date (older id = older date)
+            conn.execute(text("""
+                UPDATE sales 
+                SET created_at = NOW() - INTERVAL '1 day' * (1000000 - id) / 1000000
+                WHERE created_at IS NULL
+            """))
+            conn.commit()
+        print("✅ created_at column + 1M+ records backfilled!")
+
+# CALL ON STARTUP (before app.run)
+
 
 def send_stock_alert_email(alert):
     """🚨 smartstockretaila@gmail.com → YOUR 3 manager emails"""
@@ -1039,6 +1060,7 @@ def start_live_updater_once():
 def init_app():
     with app.app_context():
         ensure_tables_exist()
+        ensure_sales_timestamp()
         start_live_updater_once()  # ✅ SINGLE CALL
 init_app()
 @app.route("/debug")
@@ -1063,36 +1085,39 @@ def product_history_page():
 def history_search():
     if current_user.role != 'admin':
         return jsonify({"error": "Admin only!"}), 403
-    
     try:
         date_from = request.args.get("date_from")
         date_to = request.args.get("date_to", date_from)
         city = request.args.get("city", "").strip()
-        store = request.args.get("store", "").strip()  # ← STORE NAME!
+        store = request.args.get("store", "").strip()
         product = request.args.get("product", "").strip()
         
         params = {}
         sql = """
         SELECT 
-            s.timestamp, s.storeid, st.storename, c.cityname,
-            s.productid, p.productname, s.stock, s.sale_amount,
-            CASE WHEN s.stock < 5 THEN '🔴 Low Stock'
-                 WHEN s.stock > 40 THEN '🟡 Overstock'
-                 ELSE '🟢 OK' END as stock_status
+            s.dt as timestamp,  # 🔥 YOUR dt column!
+            s.id as record_id,
+            s.storeid, st.storename, c.cityname,
+            s.productid, p.productname, 
+            s.stock, s.sale_amount,
+            CASE 
+                WHEN s.stock < 5 THEN '🔴 Low Stock'
+                WHEN s.stock > 40 THEN '🟡 Overstock'
+                ELSE '🟢 OK'
+            END as stock_status
         FROM sales s
         JOIN store st ON s.storeid = st.storeid
         JOIN city c ON st.cityid = c.cityid
         JOIN product p ON s.productid = p.productid
         WHERE 1=1
         """
-        
-        if date_from: sql += " AND DATE(s.timestamp) >= :date_from"; params["date_from"] = date_from
-        if date_to:   sql += " AND DATE(s.timestamp) <= :date_to"; params["date_to"] = date_to
+        if date_from: sql += " AND DATE(s.dt) >= :date_from"; params["date_from"] = date_from
+        if date_to:   sql += " AND DATE(s.dt) <= :date_to"; params["date_to"] = date_to
         if city:      sql += " AND c.cityname ILIKE :city"; params["city"] = f"%{city}%"
         if store:     sql += " AND st.storename ILIKE :store_name"; params["store_name"] = f"%{store}%"
         if product:   sql += " AND p.productname ILIKE :product"; params["product"] = f"%{product}%"
         
-        sql += " ORDER BY s.timestamp DESC LIMIT 100"
+        sql += " ORDER BY s.dt DESC LIMIT 100"
         df = pd.read_sql(text(sql), engine, params=params)
         return jsonify(df.to_dict('records'))
     except Exception as e:
