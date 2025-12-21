@@ -4,39 +4,53 @@
 <div class="row mb-5">
     <div class="col-12">
         <h1 class="display-5 fw-bold mb-1"><i class="fas fa-history text-warning"></i> Product History</h1>
-        <p class="text-muted mb-4">🔍 Type to search Cities → Stores → Products</p>
+        <p class="text-muted mb-4">🔍 Type to filter → City → Stores → Products (CASCADE)</p>
     </div>
 </div>
 
-<!-- 🔥 SIMPLE SEARCH FORM -->
+<!-- 🔥 CASCADE SEARCH -->
 <div class="row mb-5">
-    <div class="col-md-10 mx-auto">
+    <div class="col-md-12">
         <div class="card glass-card shadow-lg">
             <div class="card-body p-4">
-                <form id="historySearchForm">
+                <form id="historyForm">
                     <div class="row g-3">
                         <div class="col-md-2">
                             <label class="form-label fw-bold">📅 Date From</label>
-                            <input type="date" class="form-control glass-input" name="date_from">
+                            <input type="date" class="form-control glass-input" name="date_from" id="date_from">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label fw-bold">📅 Date To</label>
-                            <input type="date" class="form-control glass-input" name="date_to">
+                            <input type="date" class="form-control glass-input" name="date_to" id="date_to">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label fw-bold">🏙️ City</label>
-                            <input type="text" class="form-control glass-input" name="city" placeholder="Delhi">
+                            <div class="position-relative">
+                                <input type="text" class="form-control glass-input" id="cityInput" placeholder="Type 'm'...">
+                                <input type="hidden" name="city" id="cityVal">
+                                <div id="cityDropdown" class="dropdown-menu w-100 shadow position-absolute z-3" style="display:none; max-height:200px; overflow-y:auto;"></div>
+                            </div>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label fw-bold">🏪 Store</label>
-                            <input type="text" class="form-control glass-input" name="store" placeholder="Store 7">
+                            <div class="position-relative">
+                                <input type="text" class="form-control glass-input" id="storeInput" placeholder="Select city first" disabled>
+                                <input type="hidden" name="store" id="storeVal">
+                                <div id="storeDropdown" class="dropdown-menu w-100 shadow position-absolute z-3" style="display:none; max-height:200px; overflow-y:auto;"></div>
+                            </div>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label fw-bold">📦 Product</label>
-                            <input type="text" class="form-control glass-input" name="product" placeholder="Toothpaste">
+                            <div class="position-relative">
+                                <input type="text" class="form-control glass-input" id="productInput" placeholder="Select store first" disabled>
+                                <input type="hidden" name="product" id="productVal">
+                                <div id="productDropdown" class="dropdown-menu w-100 shadow position-absolute z-3" style="display:none; max-height:200px; overflow-y:auto;"></div>
+                            </div>
                         </div>
-                        <div class="col-md-2">
-                            <button type="submit" class="btn glass-btn btn-lg w-100">🔍 SEARCH</button>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn glass-btn btn-lg w-100" id="searchBtn" disabled>
+                                <i class="fas fa-search me-2"></i>🔍 SEARCH
+                            </button>
                         </div>
                     </div>
                 </form>
@@ -50,13 +64,13 @@
     <div class="col-12">
         <div class="card glass-card shadow-lg">
             <div class="card-header bg-warning text-dark">
-                <h5>📊 Historical Records (<span id="resultsCount">0</span>)</h5>
+                <h5 id="resultsTitle">📊 Historical Records (<span id="resultsCount">0</span>)</h5>
             </div>
             <div class="card-body p-0">
                 <div id="resultsTable" class="table-responsive">
                     <div class="p-5 text-center text-muted">
                         <i class="fas fa-search fa-3x mb-3 opacity-50"></i>
-                        <h5>Enter criteria and click SEARCH</h5>
+                        <h5>Type city → store → product → SEARCH</h5>
                     </div>
                 </div>
             </div>
@@ -65,19 +79,147 @@
 </div>
 
 <script>
-document.getElementById('historySearchForm').addEventListener('submit', async function(e) {
+let selectedCity = '', selectedStoreId = '', selectedStoreName = '', selectedProduct = '';
+
+// 🔥 CITY AUTOCOMPLETE
+document.getElementById('cityInput').addEventListener('input', async function(e) {
+    const query = e.target.value.trim().toLowerCase();
+    if (query.length < 1) {
+        document.getElementById('cityDropdown').style.display = 'none';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/cities?search=${encodeURIComponent(query)}`);
+        const cities = await response.json();
+        
+        const dropdown = document.getElementById('cityDropdown');
+        dropdown.innerHTML = cities.map(city => `
+            <a class="dropdown-item p-2" href="#" onclick="selectCity('${city.cityname}')">
+                ${city.cityname} <span class="badge bg-primary ms-2">${city.store_count} stores</span>
+            </a>
+        `).join('');
+        dropdown.style.display = cities.length ? 'block' : 'none';
+    } catch(e) {
+        console.error('City search failed:', e);
+    }
+});
+
+function selectCity(cityName) {
+    selectedCity = cityName;
+    document.getElementById('cityInput').value = cityName;
+    document.getElementById('cityVal').value = cityName;
+    document.getElementById('cityDropdown').style.display = 'none';
+    
+    // Enable store input
+    document.getElementById('storeInput').disabled = false;
+    document.getElementById('storeInput').placeholder = `Stores in ${cityName}...`;
+    document.getElementById('storeInput').value = '';
+    updateSearchButton();
+}
+
+// 🔥 STORE AUTOCOMPLETE (City-specific)
+document.getElementById('storeInput').addEventListener('input', async function(e) {
+    const query = e.target.value.trim().toLowerCase();
+    if (query.length < 1 || !selectedCity) {
+        document.getElementById('storeDropdown').style.display = 'none';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/stores-by-city?city=${encodeURIComponent(selectedCity)}`);
+        const stores = await response.json();
+        const filtered = stores.filter(store => 
+            store.storename.toLowerCase().includes(query)
+        );
+        
+        const dropdown = document.getElementById('storeDropdown');
+        dropdown.innerHTML = filtered.map(store => `
+            <a class="dropdown-item p-2" href="#" onclick="selectStore(${store.storeid}, '${store.storename}')">
+                ${store.storename}
+            </a>
+        `).join('');
+        dropdown.style.display = filtered.length ? 'block' : 'none';
+    } catch(e) {
+        console.error('Store search failed:', e);
+    }
+});
+
+function selectStore(storeId, storeName) {
+    selectedStoreId = storeId;
+    selectedStoreName = storeName;
+    document.getElementById('storeInput').value = storeName;
+    document.getElementById('storeVal').value = storeName;
+    document.getElementById('storeDropdown').style.display = 'none';
+    
+    // Enable product input
+    document.getElementById('productInput').disabled = false;
+    document.getElementById('productInput').placeholder = `Products in ${storeName}...`;
+    document.getElementById('productInput').value = '';
+    updateSearchButton();
+}
+
+// 🔥 PRODUCT AUTOCOMPLETE (Store-specific)
+document.getElementById('productInput').addEventListener('input', async function(e) {
+    const query = e.target.value.trim().toLowerCase();
+    if (query.length < 1 || !selectedStoreId) {
+        document.getElementById('productDropdown').style.display = 'none';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/store-products?storeid=${selectedStoreId}`);
+        const products = await response.json();
+        const filtered = products.filter(product => 
+            product.productname.toLowerCase().includes(query)
+        );
+        
+        const dropdown = document.getElementById('productDropdown');
+        dropdown.innerHTML = filtered.map(product => `
+            <a class="dropdown-item p-2" href="#" onclick="selectProduct('${product.productname}')">
+                ${product.productname}
+            </a>
+        `).join('');
+        dropdown.style.display = filtered.length ? 'block' : 'none';
+    } catch(e) {
+        console.error('Product search failed:', e);
+    }
+});
+
+function selectProduct(productName) {
+    selectedProduct = productName;
+    document.getElementById('productInput').value = productName;
+    document.getElementById('productVal').value = productName;
+    document.getElementById('productDropdown').style.display = 'none';
+    updateSearchButton();
+}
+
+function updateSearchButton() {
+    const ready = selectedCity && selectedStoreId && selectedProduct;
+    document.getElementById('searchBtn').disabled = !ready;
+}
+
+// 🔥 SEARCH
+document.getElementById('historyForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     
-    const formData = new FormData(this);
+    const formData = new FormData();
+    formData.append('date_from', document.getElementById('date_from').value);
+    formData.append('date_to', document.getElementById('date_to').value);
+    formData.append('city', selectedCity);
+    formData.append('store', selectedStoreName);
+    formData.append('product', selectedProduct);
+    
     const params = new URLSearchParams();
     for (let [key, value] of formData.entries()) {
         if (value.trim()) params.append(key, value.trim());
     }
     
+    const btn = document.getElementById('searchBtn');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Searching...';
+    btn.disabled = true;
+    
     try {
-        document.getElementById('search_btn') ? 
-            document.getElementById('search_btn').innerHTML = '⏳ Searching...' : null;
-            
         const response = await fetch(`/api/history-search?${params}`);
         const data = await response.json();
         
@@ -98,7 +240,10 @@ document.getElementById('historySearchForm').addEventListener('submit', async fu
         let html = `
             <table class="table table-hover mb-0">
                 <thead class="table-dark">
-                    <tr><th>Date</th><th>City</th><th>Store</th><th>Product</th><th>Stock</th><th>Sales</th><th>Status</th></tr>
+                    <tr>
+                        <th>Date</th><th>City</th><th>Store</th><th>Product</th>
+                        <th>Stock</th><th>Sales</th><th>Status</th>
+                    </tr>
                 </thead>
                 <tbody>
         `;
@@ -108,14 +253,15 @@ document.getElementById('historySearchForm').addEventListener('submit', async fu
                                row.stock_status.includes('Overstock') ? 'text-warning' : 'text-success';
             html += `
                 <tr>
-                    <td>${row.timestamp ? row.timestamp.split('T')[0] : 'N/A'}</td>
+                    <td>${new Date(row.timestamp).toLocaleDateString()}</td>
                     <td><span class="badge bg-info">${row.cityname}</span></td>
                     <td>${row.storename}</td>
                     <td>${row.productname}</td>
                     <td><strong class="${statusClass}">${row.stock}</strong></td>
                     <td>${row.sale_amount || 0}</td>
                     <td><span class="badge ${statusClass === 'text-danger' ? 'bg-danger' : statusClass === 'text-warning' ? 'bg-warning text-dark' : 'bg-success'}">${row.stock_status}</span></td>
-                </tr>`;
+                </tr>
+            `;
         });
         html += '</tbody></table>';
         document.getElementById('resultsTable').innerHTML = html;
@@ -123,7 +269,16 @@ document.getElementById('historySearchForm').addEventListener('submit', async fu
     } catch(e) {
         console.error('Search failed:', e);
         document.getElementById('resultsTable').innerHTML = 
-            `<div class="alert alert-danger p-5 m-0"><h5>❌ Search failed: ${e.message}</h5></div>`;
+            `<div class="alert alert-danger p-5 m-0"><h5>❌ Search failed</h5></div>`;
+    }
+    
+    btn.innerHTML = '<i class="fas fa-search me-2"></i>🔍 SEARCH';
+});
+
+// Hide dropdowns on outside click
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.position-relative')) {
+        document.querySelectorAll('[id$="Dropdown"]').forEach(d => d.style.display = 'none');
     }
 });
 </script>
