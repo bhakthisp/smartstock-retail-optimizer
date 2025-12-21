@@ -352,7 +352,7 @@ def live_updater_background():
             products = [(1, 'Demo Product')]
             cities = {1: 'Demo City'}
         print("🚀 Live updater LOOP STARTED! (15s)")
-        SALE_INTERVAL = 180
+        SALE_INTERVAL = 60
         while True:
             now = datetime.now()
             store_row = random.choice(stores)
@@ -430,7 +430,7 @@ def live_updater_background():
             if len(all_alerts) > 10000:
                 all_alerts = all_alerts[-10000:]
             print(f"[{alert['timestamp']}] {alert['city']} / {alert['store']} / {alert['product']} → {alert['stock_alert']} | {alert['forecast']}")
-            time.sleep(180) 
+            time.sleep(60) 
     finally:
         cur.close()
         conn.close()
