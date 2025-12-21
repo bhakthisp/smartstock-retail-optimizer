@@ -526,27 +526,24 @@ def get_fresh_alerts_from_db(limit=1000):
 @app.route("/login", methods=["GET","POST"])
 def login():
     ensure_tables_exist()
-    if request.method=="POST":
+    if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
-        client_ip = request.remote_addr or "0.0.0.0"
+        client_ip = request.remote_addr or "127.0.0.1"
         user_agent = request.headers.get("User-Agent", "Unknown")
         
-        print(f"🔓 LOGIN ATTEMPT: {username}/{password} from {client_ip}")
+        print(f"🔓 LOGIN: {username}/{password} from {client_ip}")
         
         conn = get_db_conn_raw()
         cursor = get_cursor(conn)
         
-        # 🔥 LOG EVERY ATTEMPT
-        try:
-            cursor.execute("""
-                INSERT INTO login_logs (username, ip_address, user_agent, success, role) 
-                VALUES (%s, %s, %s, FALSE, 'unknown')
-            """, (username, client_ip, user_agent))
-            conn.commit()
-            log_id = cursor.lastrowid
-        except:
-            log_id = None
+        # 🔥 LOG ATTEMPT (always FALSE first)
+        cursor.execute("""
+            INSERT INTO login_logs (username, ip_address, user_agent, success, role) 
+            VALUES (%s, %s, %s, FALSE, 'unknown')
+        """, (username, client_ip, user_agent))
+        conn.commit()
+        log_id = cursor.lastrowid
         
         success = False
         role = None
@@ -554,31 +551,33 @@ def login():
         storename = None
         cityid = None
         
-        # ADMIN
+        # 🔥 ADMIN CHECK
         if username == "admin" and password == "admin123":
             success = True
-            role = 'admin'
+            role = "admin"
             
-        # STORE MANAGER
+        # 🔥 STORE MANAGER CHECK
         else:
-            cursor.execute("SELECT storeid, storename, store_manager, cityid FROM store WHERE store_manager = %s AND password = %s", (username, password))
+            cursor.execute("""
+                SELECT storeid, storename, store_manager, cityid 
+                FROM store WHERE store_manager = %s AND password = %s
+            """, (username, password))
             store_user = cursor.fetchone()
             if store_user:
                 success = True
-                role = 'store_manager'
-                storeid = store_user[0]
-                storename = store_user[1]
-                cityid = store_user[3]
+                role = "store_manager"
+                storeid, storename, _, cityid = store_user
         
-        # 🔥 UPDATE LOG WITH SUCCESS
-        if log_id and success:
+        # 🔥 UPDATE LOG WITH REAL STATUS
+        if log_id:
             cursor.execute("""
                 UPDATE login_logs 
-                SET success=TRUE, role=%s, storeid=%s, storename=%s, cityid=%s 
-                WHERE id=%s
-            """, (role, storeid, storename, cityid, log_id))
+                SET success = %s, role = %s, storeid = %s, storename = %s, cityid = %s 
+                WHERE id = %s
+            """, (success, role, storeid, storename, cityid, log_id))
             conn.commit()
         
+        cursor.close()
         conn.close()
         
         if success:
@@ -683,83 +682,59 @@ def admin_stores():
 @login_required
 def admin_login_logs():
     if current_user.role != 'admin':
-        flash("❌ Admin only!", "danger")
         return redirect(url_for('dashboard'))
     
     conn = get_db_conn_raw()
     cursor = get_cursor(conn)
     cursor.execute("""
-        SELECT username, role, storeid, storename, cityname, ip_address, 
-               success, login_time 
-        FROM (
-            SELECT ll.username, ll.role, ll.storeid, ll.storename, 
-                   c.cityname, ll.ip_address, ll.success, ll.login_time,
-                   ROW_NUMBER() OVER (PARTITION BY ll.username ORDER BY ll.login_time DESC) as rn
-            FROM login_logs ll 
-            LEFT JOIN store s ON ll.storeid = s.storeid
-            LEFT JOIN city c ON s.cityid = c.cityid
-        ) ranked 
-        WHERE rn = 1 OR success = TRUE
-        ORDER BY login_time DESC LIMIT 50
+        SELECT ll.login_time, ll.username, 
+               COALESCE(c.cityname, '') || ' - ' || COALESCE(ll.storename, '-') as store_display,
+               ll.ip_address, ll.success
+        FROM login_logs ll 
+        LEFT JOIN store s ON ll.storeid = s.storeid
+        LEFT JOIN city c ON s.cityid = c.cityid
+        ORDER BY ll.login_time DESC LIMIT 50
     """)
-    logs_raw = cursor.fetchall()
+    logs = cursor.fetchall()
     cursor.close()
     conn.close()
     
-    html = """
+    html = f"""
     <div style='max-width:1400px; margin:20px auto; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;'>
-        <h2 style='color:#0d6efd; margin-bottom:20px;'>📊 Login Logs (""" + str(len(logs_raw)) + """)</h2>
+        <h2 style='color:#0d6efd;'>📊 Login Logs ({len(logs)})</h2>
         <div style='background:white; border-radius:8px; box-shadow:0 0 20px rgba(0,0,0,0.1); overflow:hidden;'>
             <table style='width:100%; border-collapse:collapse;'>
-                <thead>
-                    <tr style='background:#0d6efd; color:white;'>
-                        <th style='padding:15px; text-align:left;'>Time</th>
-                        <th style='padding:15px; text-align:left;'>User</th>
-                        <th style='padding:15px; text-align:left;'>Store</th>
-                        <th style='padding:15px; text-align:left;'>IP</th>
-                        <th style='padding:15px; text-align:left;'>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
+                <thead><tr style='background:#0d6efd; color:white;'>
+                    <th style='padding:15px;'>Time</th>
+                    <th style='padding:15px;'>User</th>
+                    <th style='padding:15px;'>Store</th>
+                    <th style='padding:15px;'>IP</th>
+                    <th style='padding:15px;'>Status</th>
+                </tr></thead><tbody>
     """
     
-    for row in logs_raw:
-        username, role, storeid, storename, cityname, ip, success, login_time = row
-        
-        # ✅ FIX 1: Store = "City - Store" OR empty for admin
-        if storename and storename != '-':
-            store_display = f"{cityname or 'Unknown'} - {storename}" if cityname else storename
-        else:
-            store_display = "-"
-        
-        # ✅ FIX 2: Status - ONLY failed for wrong credentials
-        if success:
-            status = "✅ SUCCESS"
-            status_color = "#d1e7dd; color:#0f5132;"
-        else:
-            status = "❌ FAILED"
-            status_color = "#f8d7da; color:#721c24;"
+    for row in logs:
+        time, user, store, ip, success = row
+        status = "✅ SUCCESS" if success else "❌ FAILED"
+        status_color = "#d1e7dd; color:#0f5132;" if success else "#f8d7da; color:#721c24;"
         
         html += f"""
-                    <tr style='border-bottom:1px solid #dee2e6;'>
-                        <td style='padding:15px;'>{login_time}</td>
-                        <td style='padding:15px; font-weight:600;'>{username}</td>
-                        <td style='padding:15px;'>{store_display}</td>
-                        <td style='padding:15px;'>{ip}</td>
-                        <td style='padding:15px;'>
-                            <span style='background:{status_color} padding:4px 8px; border-radius:12px; font-weight:600;'>{status}</span>
-                        </td>
-                    </tr>
+            <tr style='border-bottom:1px solid #dee2e6;'>
+                <td style='padding:15px;'>{time}</td>
+                <td style='padding:15px; font-weight:600;'>{user}</td>
+                <td style='padding:15px;'>{store}</td>
+                <td style='padding:15px;'>{ip}</td>
+                <td style='padding:15px;'>
+                    <span style='background:{status_color} padding:4px 8px; border-radius:12px; font-weight:600;'>{status}</span>
+                </td>
+            </tr>
         """
     
     html += """
-                </tbody>
-            </table>
-        </div>
-        <div style='margin-top:20px;'>
-            <a href='/dashboard' style='background:#6c757d; color:white; padding:10px 20px; text-decoration:none; border-radius:6px; font-weight:500;'>← Back to Dashboard</a>
-        </div>
-    </div>
+                </tbody></table></div>
+            <div style='margin-top:20px;'>
+                <a href='/dashboard' style='background:#6c757d; color:white; padding:12px 24px; text-decoration:none; border-radius:6px; font-weight:500;'>← Dashboard</a>
+            </div></div>
     """
     return html
 
