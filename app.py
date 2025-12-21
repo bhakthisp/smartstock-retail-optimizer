@@ -834,39 +834,28 @@ def store_products_page(storeid):
 @login_required
 def email_status_page():
     if current_user.role != 'admin':
-        flash("❌ Only admins can view email status!", "danger")
+        flash("❌ Admin only!", "danger")
         return redirect(url_for('dashboard'))
     
-    try:
-        # 🔥 Get ALL email alerts from last 24h + status
-        df = pd.read_sql(text("""
-            SELECT 
-                a.timestamp,
-                a.city,
-                a.store,
-                a.storeid,
-                a.product,
-                a.stock_alert,
-                CASE 
-                    WHEN a.email_sent = 1 THEN '✅ SENT'
-                    ELSE '❌ PENDING'
-                END as email_status,
-                s.store_manager,
-                s.email as manager_email
-            FROM all_alerts_view a  -- 🔥 Your live alerts table
-            LEFT JOIN store s ON a.storeid = s.storeid
-            WHERE a.timestamp > NOW() - INTERVAL '24 hours'
-            ORDER BY a.timestamp DESC
-            LIMIT 100
-        """), engine)
-        
-        print(f"📧 Email Status: {len(df)} alerts loaded")
-        return render_template("email_status.html", 
-                             alerts=df.to_dict('records'), 
-                             user=current_user)
-    except Exception as e:
-        print(f"❌ Email status error: {e}")
-        return f"<h1>Email Status Error: {str(e)}</h1>"
+    # 🔥 USE all_alerts[] MEMORY (NO SQL NEEDED)
+    recent_alerts = []
+    for alert in reversed(all_alerts[-100:]):  # Last 100 alerts
+        if 'email_status' in alert and ('Restock Needed' in alert['stock_alert'] or 'Overstock' in alert['stock_alert']):
+            # Add store manager info
+            alert_copy = alert.copy()
+            try:
+                conn = get_db_conn_raw()
+                cur = get_cursor(conn)
+                cur.execute("SELECT store_manager FROM store WHERE storeid=%s", (alert['storeid'],))
+                mgr = cur.fetchone()
+                alert_copy['store_manager'] = mgr[0] if mgr else 'Unknown'
+                cur.close()
+                conn.close()
+            except:
+                alert_copy['store_manager'] = 'N/A'
+            recent_alerts.append(alert_copy)
+    print(f"📧 Status page: {len(recent_alerts)} alerts")
+    return render_template("email_status.html", alerts=recent_alerts, user=current_user)
 
 @app.route("/admin/users")
 @login_required
