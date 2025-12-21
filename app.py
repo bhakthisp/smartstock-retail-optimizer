@@ -570,8 +570,10 @@ def admin_login_logs():
     if current_user.role != 'admin':
         flash("❌ Admin only!", "danger")
         return redirect(url_for('dashboard'))
+    
     conn = get_db_conn_raw()
     cursor = get_cursor(conn)
+    
     cursor.execute("""
         SELECT 
             ll.login_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata' as ist_time,
@@ -581,16 +583,17 @@ def admin_login_logs():
                     COALESCE((SELECT cityname FROM city WHERE cityid = ll.cityid), 'Unknown') || ' - ' || ll.storename
                 ELSE '-' 
             END as store_display,
-            ll.ip_address,
             ll.success
         FROM login_logs ll 
         ORDER BY ll.login_time DESC LIMIT 50
     """)
+    
     logs = cursor.fetchall()
     cursor.close()
     conn.close()
+    
     html = f"""
-    <div style='max-width:1400px; margin:20px auto; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;'>
+    <div style='max-width:1000px; margin:20px auto; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;'>
         <h2 style='color:#0d6efd; margin-bottom:20px;'>📊 Login Logs (<span style='color:#198754;'>{len(logs)}</span>)</h2>
         <div style='background:white; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,0.1); overflow:hidden;'>
             <table style='width:100%; border-collapse:collapse;'>
@@ -599,38 +602,39 @@ def admin_login_logs():
                         <th style='padding:18px 15px; text-align:left; font-weight:600;'>Time (IST)</th>
                         <th style='padding:18px 15px; text-align:left; font-weight:600;'>User</th>
                         <th style='padding:18px 15px; text-align:left; font-weight:600;'>Store</th>
-                        <th style='padding:18px 15px; text-align:left; font-weight:600;'>IP</th>
                         <th style='padding:18px 15px; text-align:left; font-weight:600;'>Status</th>
                     </tr>
                 </thead>
                 <tbody>
     """
+    
     for row in logs:
-        ist_time, username, store, ip, success = row
+        ist_time, username, store, success = row
         status = "✅ SUCCESS" if success else "❌ FAILED"
-        status_color = "#d1e7dd; color:#0f5132; padding:8px 16px;" if success else "#f8d7da; color:#721c24; padding:8px 16px;"
+        status_color = "#d1e7dd; color:#0f5132; padding:10px 20px;" if success else "#f8d7da; color:#721c24; padding:10px 20px;"
         
         html += f"""
-            <tr style='border-bottom:2px solid #f8f9fa; transition:background 0.2s;'>
-                <td style='padding:20px 15px; font-size:14px;'>{ist_time}</td>
-                <td style='padding:20px 15px; font-weight:600; color:#1f2937;'>{username}</td>
-                <td style='padding:20px 15px; color:#4b5563;'>{store}</td>
-                <td style='padding:20px 15px; font-family:monospace; background:#f9fafb; border-radius:6px; padding:6px 12px; font-size:13px;'>{ip}</td>
-                <td style='padding:20px 15px;'>
-                    <span style='background:{status_color}border-radius:20px;font-weight:600;font-size:13px;'>{status}</span>
+            <tr style='border-bottom:2px solid #f8f9fa;'>
+                <td style='padding:20px 15px; font-size:14px; font-weight:500;'>{ist_time}</td>
+                <td style='padding:20px 15px; font-weight:700; color:#1f2937;'>{username}</td>
+                <td style='padding:20px 15px; color:#4b5563; font-size:14px;'>{store}</td>
+                <td style='padding:20px 15px; text-align:center;'>
+                    <span style='background:{status_color}border-radius:25px;font-weight:700;font-size:14px;display:inline-block;min-width:120px;text-align:center;'>{status}</span>
                 </td>
             </tr>
         """
+    
     html += """
                 </tbody>
             </table>
         </div>
         <div style='margin-top:25px; text-align:center;'>
-            <a href='/dashboard' style='background:linear-gradient(135deg,#6c757d,#5a6268); color:white; padding:14px 28px; text-decoration:none; border-radius:10px; font-weight:600; font-size:15px; box-shadow:0 4px 15px rgba(108,117,125,0.3); display:inline-block; transition:all 0.3s; border:none;'>← Back to Dashboard</a>
+            <a href='/dashboard' style='background:linear-gradient(135deg,#6c757d,#5a6268); color:white; padding:14px 28px; text-decoration:none; border-radius:10px; font-weight:600; font-size:15px; box-shadow:0 4px 15px rgba(108,117,125,0.3); display:inline-block;'>← Back to Dashboard</a>
         </div>
     </div>
     """
     return html
+
 @app.route("/cities")
 @login_required
 def cities_page():
