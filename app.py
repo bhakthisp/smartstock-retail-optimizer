@@ -679,21 +679,35 @@ def admin_stores():
     return render_template("admin_stores.html", stores=stores, search=search, user=current_user)
 
 @app.route("/admin/login-logs")
+@app.route("/admin/login-logs")
 @login_required
 def admin_login_logs():
     if current_user.role != 'admin':
+        flash("❌ Admin only!", "danger")
         return redirect(url_for('dashboard'))
     
+    # 🔥 IST TIMEZONE FIX
     conn = get_db_conn_raw()
     cursor = get_cursor(conn)
+    
+    # ✅ FIXED QUERY - Store names + City + IST time
     cursor.execute("""
-        SELECT ll.login_time, ll.username, 
-               COALESCE(c.cityname, '') || ' - ' || COALESCE(ll.storename, '-') as store_display,
-               ll.ip_address, ll.success
+        SELECT 
+            ll.login_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata' as ist_time,
+            ll.username,
+            CASE 
+                WHEN ll.storename IS NOT NULL AND ll.storename != '' THEN 
+                    COALESCE(c.cityname, 'Unknown') || ' - ' || ll.storename
+                ELSE '-' 
+            END as store_display,
+            ll.ip_address,
+            ll.success,
+            ll.role
         FROM login_logs ll 
         LEFT JOIN store s ON ll.storeid = s.storeid
         LEFT JOIN city c ON s.cityid = c.cityid
-        ORDER BY ll.login_time DESC LIMIT 50
+        ORDER BY ll.login_time DESC 
+        LIMIT 50
     """)
     logs = cursor.fetchall()
     cursor.close()
@@ -701,42 +715,48 @@ def admin_login_logs():
     
     html = f"""
     <div style='max-width:1400px; margin:20px auto; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;'>
-        <h2 style='color:#0d6efd;'>📊 Login Logs ({len(logs)})</h2>
+        <h2 style='color:#0d6efd;'>📊 Login Logs (<span style='color:#198754;'>{len(logs)}</span>)</h2>
         <div style='background:white; border-radius:8px; box-shadow:0 0 20px rgba(0,0,0,0.1); overflow:hidden;'>
             <table style='width:100%; border-collapse:collapse;'>
-                <thead><tr style='background:#0d6efd; color:white;'>
-                    <th style='padding:15px;'>Time</th>
-                    <th style='padding:15px;'>User</th>
-                    <th style='padding:15px;'>Store</th>
-                    <th style='padding:15px;'>IP</th>
-                    <th style='padding:15px;'>Status</th>
-                </tr></thead><tbody>
+                <thead>
+                    <tr style='background:#0d6efd; color:white;'>
+                        <th style='padding:15px;'>Time (IST)</th>
+                        <th style='padding:15px;'>User</th>
+                        <th style='padding:15px;'>Store</th>
+                        <th style='padding:15px;'>IP</th>
+                        <th style='padding:15px;'>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
     """
     
     for row in logs:
-        time, user, store, ip, success = row
+        ist_time, username, store, ip, success, role = row
         status = "✅ SUCCESS" if success else "❌ FAILED"
         status_color = "#d1e7dd; color:#0f5132;" if success else "#f8d7da; color:#721c24;"
         
         html += f"""
             <tr style='border-bottom:1px solid #dee2e6;'>
-                <td style='padding:15px;'>{time}</td>
-                <td style='padding:15px; font-weight:600;'>{user}</td>
+                <td style='padding:15px;'>{ist_time}</td>
+                <td style='padding:15px; font-weight:600;'>{username}</td>
                 <td style='padding:15px;'>{store}</td>
                 <td style='padding:15px;'>{ip}</td>
                 <td style='padding:15px;'>
-                    <span style='background:{status_color} padding:4px 8px; border-radius:12px; font-weight:600;'>{status}</span>
+                    <span style='background:{status_color}padding:4px 8px;border-radius:12px;font-weight:600;'>{status}</span>
                 </td>
             </tr>
         """
     
     html += """
-                </tbody></table></div>
+                </tbody></table>
+            </div>
             <div style='margin-top:20px;'>
-                <a href='/dashboard' style='background:#6c757d; color:white; padding:12px 24px; text-decoration:none; border-radius:6px; font-weight:500;'>← Dashboard</a>
-            </div></div>
+                <a href='/dashboard' style='background:#6c757d;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:500;'>← Dashboard</a>
+            </div>
+        </div>
     """
     return html
+
 
 
 @app.route("/cities")
