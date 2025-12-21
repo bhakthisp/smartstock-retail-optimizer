@@ -678,27 +678,6 @@ def admin_stores():
     conn.close()
     
     return render_template("admin_stores.html", stores=stores, search=search, user=current_user)
-@app.route("/admin/login-logs")
-@login_required
-def admin_login_logs():
-    if current_user.role != 'admin':
-        flash("❌ Admin only!", "danger")
-        return redirect(url_for('dashboard'))
-    
-    conn = get_db_conn_raw()
-    cursor = get_cursor(conn)
-    cursor.execute("SELECT id, username, role, storeid, storename, ip_address, success, login_time, cityid FROM login_logs ORDER BY login_time DESC LIMIT 1000")
-    logs = []
-    for row in cursor.fetchall():
-        logs.append({
-            'id': row[0], 'username': row[1], 'role': row[2], 
-            'storeid': row[3], 'storename': row[4], 'ip': row[5],
-            'success': row[6], 'time': row[7].strftime("%Y-%m-%d %H:%M:%S"),
-            'cityid': row[8]
-        })
-    cursor.close()
-    conn.close()
-    return render_template("admin_login_logs.html", logs=logs, user=current_user)
 
 @app.route("/admin/login-logs")
 @login_required
