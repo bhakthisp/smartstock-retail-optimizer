@@ -4,11 +4,11 @@
 <div class="row mb-5">
     <div class="col-12">
         <h1 class="display-5 fw-bold mb-1"><i class="fas fa-history text-warning"></i> Product History</h1>
-        <p class="text-muted mb-4">🔍 Type to auto-filter Cities → Stores → Products</p>
+        <p class="text-muted mb-4">🔍 Type to search Cities → Stores → Products</p>
     </div>
 </div>
 
-<!-- 🔥 AUTOCOMPLETE FORM -->
+<!-- 🔥 SIMPLE SEARCH FORM -->
 <div class="row mb-5">
     <div class="col-md-10 mx-auto">
         <div class="card glass-card shadow-lg">
@@ -17,35 +17,26 @@
                     <div class="row g-3">
                         <div class="col-md-2">
                             <label class="form-label fw-bold">📅 Date From</label>
-                            <input type="date" class="form-control glass-input" name="date_from" id="date_from">
+                            <input type="date" class="form-control glass-input" name="date_from">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label fw-bold">📅 Date To</label>
-                            <input type="date" class="form-control glass-input" name="date_to" id="date_to">
+                            <input type="date" class="form-control glass-input" name="date_to">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label fw-bold">🏙️ City</label>
-                            <div class="position-relative">
-                                <input type="text" class="form-control glass-input" id="city_input" placeholder="Type 'm'...">
-                                <input type="hidden" name="city" id="city_value">
-                            </div>
+                            <input type="text" class="form-control glass-input" name="city" placeholder="Delhi">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label fw-bold">🏪 Store</label>
-                            <div class="position-relative">
-                                <input type="text" class="form-control glass-input" id="store_input" placeholder="Select city..." disabled>
-                                <input type="hidden" name="store" id="store_value">
-                            </div>
+                            <input type="text" class="form-control glass-input" name="store" placeholder="Store 7">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label fw-bold">📦 Product</label>
-                            <div class="position-relative">
-                                <input type="text" class="form-control glass-input" id="product_input" placeholder="Select store..." disabled>
-                                <input type="hidden" name="product" id="product_value">
-                            </div>
+                            <input type="text" class="form-control glass-input" name="product" placeholder="Toothpaste">
                         </div>
                         <div class="col-md-2">
-                            <button type="submit" class="btn glass-btn btn-lg w-100" id="search_btn" disabled>🔍 SEARCH</button>
+                            <button type="submit" class="btn glass-btn btn-lg w-100">🔍 SEARCH</button>
                         </div>
                     </div>
                 </form>
@@ -65,7 +56,7 @@
                 <div id="resultsTable" class="table-responsive">
                     <div class="p-5 text-center text-muted">
                         <i class="fas fa-search fa-3x mb-3 opacity-50"></i>
-                        <h5>Type city → store → product → SEARCH</h5>
+                        <h5>Enter criteria and click SEARCH</h5>
                     </div>
                 </div>
             </div>
@@ -74,87 +65,19 @@
 </div>
 
 <script>
-let cities = [], stores = [], products = [];
-
-// 🔥 CITY AUTOCOMPLETE
-document.getElementById('city_input').addEventListener('input', async function() {
-    const query = this.value.trim();
-    if (query.length < 1) return;
-    
-    try {
-        const response = await fetch(`/api/cities?search=${encodeURIComponent(query)}`);
-        cities = await response.json();
-        
-        showDropdown('city_dropdown', cities.map(c => 
-            `<li class="dropdown-item p-2" onclick="selectCity('${c.cityname}')">${c.cityname} (${c.store_count} stores)</li>`
-        ).join(''));
-    } catch(e) {
-        console.error('City search failed:', e);
-    }
-});
-
-function showDropdown(id, html) {
-    let dropdown = document.getElementById(id);
-    if (!dropdown) {
-        dropdown = document.createElement('ul');
-        dropdown.id = id;
-        dropdown.className = 'list-group position-absolute w-100 shadow mt-1 z-3 bg-white rounded';
-        dropdown.style.display = 'none';
-        dropdown.style.maxHeight = '200px';
-        dropdown.style.overflowY = 'auto';
-        dropdown.parentNode.style.position = 'relative';
-        dropdown.parentNode.appendChild(dropdown);
-    }
-    dropdown.innerHTML = html;
-    dropdown.style.display = html ? 'block' : 'none';
-}
-
-function selectCity(cityname) {
-    document.getElementById('city_input').value = cityname;
-    document.getElementById('city_value').value = cityname;
-    document.getElementById('city_dropdown').style.display = 'none';
-    document.getElementById('store_input').disabled = false;
-    document.getElementById('store_input').placeholder = `Stores in ${cityname}...`;
-    updateSearchButton();
-}
-
-// 🔥 STORE AUTOCOMPLETE
-document.getElementById('store_input').addEventListener('input', async function() {
-    const query = this.value.trim();
-    const city = document.getElementById('city_value').value;
-    if (query.length < 1 || !city) return;
-    
-    try {
-        const response = await fetch(`/api/stores-by-city?city=${encodeURIComponent(city)}`);
-        stores = await response.json();
-        const filtered = stores.filter(s => s.storename.toLowerCase().includes(query.toLowerCase()));
-        
-        showDropdown('store_dropdown', filtered.map(s => 
-            `<li class="dropdown-item p-2" onclick="selectStore('${s.storename}')">${s.storename}</li>`
-        ).join(''));
-    } catch(e) {
-        console.error('Store search failed:', e);
-    }
-});
-
-function selectStore(storename) {
-    document.getElementById('store_input').value = storename;
-    document.getElementById('store_value').value = storename;
-    document.getElementById('store_dropdown').style.display = 'none';
-    document.getElementById('product_input').disabled = false;
-    updateSearchButton();
-}
-
-// 🔥 SEARCH
 document.getElementById('historySearchForm').addEventListener('submit', async function(e) {
     e.preventDefault();
+    
     const formData = new FormData(this);
     const params = new URLSearchParams();
-    for (let [key, value] of formData) {
+    for (let [key, value] of formData.entries()) {
         if (value.trim()) params.append(key, value.trim());
     }
     
     try {
+        document.getElementById('search_btn') ? 
+            document.getElementById('search_btn').innerHTML = '⏳ Searching...' : null;
+            
         const response = await fetch(`/api/history-search?${params}`);
         const data = await response.json();
         
@@ -179,12 +102,13 @@ document.getElementById('historySearchForm').addEventListener('submit', async fu
                 </thead>
                 <tbody>
         `;
+        
         data.forEach(row => {
             const statusClass = row.stock_status.includes('Low') ? 'text-danger' : 
                                row.stock_status.includes('Overstock') ? 'text-warning' : 'text-success';
             html += `
                 <tr>
-                    <td>${row.timestamp.split('T')[0]}</td>
+                    <td>${row.timestamp ? row.timestamp.split('T')[0] : 'N/A'}</td>
                     <td><span class="badge bg-info">${row.cityname}</span></td>
                     <td>${row.storename}</td>
                     <td>${row.productname}</td>
@@ -195,21 +119,11 @@ document.getElementById('historySearchForm').addEventListener('submit', async fu
         });
         html += '</tbody></table>';
         document.getElementById('resultsTable').innerHTML = html;
+        
     } catch(e) {
         console.error('Search failed:', e);
-    }
-});
-
-function updateSearchButton() {
-    const hasCity = document.getElementById('city_value').value;
-    const hasStore = document.getElementById('store_value').value;
-    document.getElementById('search_btn').disabled = !(hasCity && hasStore);
-}
-
-// Hide dropdowns on outside click
-document.addEventListener('click', function(e) {
-    if (!e.target.closest('.position-relative')) {
-        document.querySelectorAll('[id$="_dropdown"]').forEach(d => d && (d.style.display = 'none'));
+        document.getElementById('resultsTable').innerHTML = 
+            `<div class="alert alert-danger p-5 m-0"><h5>❌ Search failed: ${e.message}</h5></div>`;
     }
 });
 </script>
