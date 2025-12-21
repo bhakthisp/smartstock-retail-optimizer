@@ -531,69 +531,45 @@ def login():
         password = request.form.get("password", "").strip()
         client_ip = request.remote_addr or "127.0.0.1"
         
-        print(f"🔓 LOGIN ATTEMPT: {username} from {client_ip}")
+        print(f"🔓 LOGIN: {username}/{password}")
         
+        # 🔥 STEP 1: Create log entry (FALSE first)
         conn = get_db_conn_raw()
         cursor = get_cursor(conn)
-        
-        # 1. LOG ATTEMPT (ALWAYS FALSE first)
-        cursor.execute("""
-            INSERT INTO login_logs (username, ip_address, success, role) 
-            VALUES (%s, %s, FALSE, 'unknown')
-        """, (username, client_ip))
+        cursor.execute("INSERT INTO login_logs (username, ip_address, success) VALUES (%s, %s, FALSE)", (username, client_ip))
         conn.commit()
-        log_id = cursor.lastrowid  # ✅ GET ID
+        log_id = cursor.lastrowid  # CRITICAL!
         
         success = False
-        role = None
-        storeid = None
-        storename = None
-        cityid = None
+        role, storeid, storename, cityid = None, None, None, None
         
-        # 2. CHECK ADMIN
+        # 🔥 STEP 2: VALIDATE USER
         if username == "admin" and password == "admin123":
             success = True
             role = "admin"
-            print("✅ ADMIN LOGIN SUCCESS")
-        
-        # 3. CHECK STORE MANAGER
         else:
-            cursor.execute("""
-                SELECT storeid, storename, cityid 
-                FROM store WHERE store_manager = %s AND password = %s
-            """, (username, password))
-            store_row = cursor.fetchone()
-            if store_row:
-                storeid, storename, cityid = store_row
+            cursor.execute("SELECT storeid, storename, cityid FROM store WHERE store_manager=%s AND password=%s", (username, password))
+            store_data = cursor.fetchone()
+            if store_data:
+                storeid, storename, cityid = store_data
                 success = True
                 role = "store_manager"
-                print(f"✅ STORE LOGIN: {storename}")
         
-        # 4. 🔥 UPDATE LOG WITH CORRECT STATUS (THIS WAS BROKEN!)
-        if log_id:
-            cursor.execute("""
-                UPDATE login_logs 
-                SET success = %s, role = %s, storeid = %s, storename = %s, cityid = %s
-                WHERE id = %s
-            """, (bool(success), role, storeid, storename, cityid, log_id))
-            conn.commit()
-            print(f"✅ LOG UPDATED: ID={log_id}, success={success}")
+        # 🔥 STEP 3: UPDATE LOG WITH REAL STATUS (THIS WAS MISSING!)
+        cursor.execute("""
+            UPDATE login_logs SET success=%s, role=%s, storeid=%s, storename=%s, cityid=%s 
+            WHERE id=%s
+        """, (success, role, storeid, storename, cityid, log_id))
+        conn.commit()
         
         cursor.close()
         conn.close()
         
         if success:
-            session['user_data'] = {
-                'id': storeid or 1, 'username': username, 'role': role,
-                'storeid': storeid, 'storename': storename, 'cityid': cityid
-            }
-            user_obj = User(**session['user_data'])
-            login_user(user_obj)
-            print(f"🚀 LOGIN SUCCESS: {username}")
+            session['user_data'] = {'id': storeid or 1, 'username': username, 'role': role, 'storeid': storeid, 'storename': storename, 'cityid': cityid}
+            login_user(User(**session['user_data']))
             return redirect(url_for('dashboard'))
-        else:
-            print(f"❌ LOGIN FAILED: {username}")
-            flash("Invalid credentials!", "danger")
+        flash("Wrong credentials!")
     
     return render_template("login.html")
 
