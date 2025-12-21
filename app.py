@@ -27,7 +27,7 @@ app.secret_key = os.getenv("SECRET_KEY", "smartstock-super-secret-key-2025")
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'bhakthispgowda13@gmail.com'  # Admin sender
+app.config['MAIL_USERNAME'] = 'smartstockretaila@gmail.com'  # Admin sender
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')    # From .env
 mail = Mail(app)  # 🔥 Initialize Mail
 # 🔥 DYNAMIC ENGINE (PostgreSQL + MySQL)
@@ -258,7 +258,7 @@ def ensure_tables_exist():
         if conn: conn.close()
 
 def send_stock_alert_email(alert):
-    """🚨 bhakthispgowda13@gmail.com → YOUR 3 manager emails"""
+    """🚨 smartstockretaila@gmail.com → YOUR 3 manager emails"""
     try:
         conn = get_db_conn_raw()
         cursor = get_cursor(conn)
@@ -315,13 +315,13 @@ def send_stock_alert_email(alert):
                 
                 <p style="text-align: center; color: #6c757d; font-size: 14px; margin-top: 30px;">
                     This is an automated alert from <strong>SmartStock Inventory Optimizer</strong><br>
-                    Sent from: bhakthispgowda13@gmail.com
+                    Sent from: smartstockretaila@gmail.com
                 </p>
             </div>
             """
             msg = Message(
                 subject=subject,
-                sender='bhakthispgowda13@gmail.com',  # Admin
+                sender='smartstockretaila@gmail.com',  # Admin
                 recipients=[manager_email],           # Your 3 emails
                 html=html_body
             )
