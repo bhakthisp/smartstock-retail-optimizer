@@ -861,6 +861,68 @@ def store_products_page(storeid):
         print(f"❌ Store products error: {e}")
         return f"<h1>Store {storeid} Products: Error {str(e)}</h1>"
 
+@app.route("/admin/users")
+@login_required
+def admin_users():
+    if current_user.role != 'admin':
+        flash("❌ Store managers cannot access admin pages!", "danger")
+        return redirect(url_for('dashboard'))
+    
+    # 🔥 GET ALL STORE MANAGERS
+    conn = get_db_conn_raw()
+    cursor = get_cursor(conn)
+    cursor.execute("""
+        SELECT s.storeid, s.storename, s.store_manager, s.password, c.cityname
+        FROM store s LEFT JOIN city c ON s.cityid = c.cityid 
+        ORDER BY s.storename
+    """)
+    users_raw = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    users = []
+    for row in users_raw:
+        users.append({
+            'store': row[1], 'username': row[2], 
+            'password': row[3], 'city': row[4] or 'Unknown'
+        })
+    
+    # 🔥 PERFECT HTML TABLE (matches login-logs style)
+    html = f"""
+    <div style='max-width:1200px; margin:20px auto; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;'>
+        <h2 style='color:#0d6efd;'>👥 Store Managers ({len(users)})</h2>
+        <div style='background:white; border-radius:8px; box-shadow:0 0 20px rgba(0,0,0,0.1); overflow:hidden;'>
+            <table style='width:100%; border-collapse:collapse;'>
+                <thead><tr style='background:#0d6efd; color:white;'>
+                    <th style='padding:15px;'>Store</th>
+                    <th style='padding:15px;'>Manager</th>
+                    <th style='padding:15px;'>Password</th>
+                    <th style='padding:15px;'>City</th>
+                </tr></thead><tbody>
+    """
+    
+    for user in users:
+        html += f"""
+            <tr style='border-bottom:1px solid #dee2e6;'>
+                <td style='padding:15px; font-weight:600;'>{user['store']}</td>
+                <td style='padding:15px;'>{user['username']}</td>
+                <td style='padding:15px;'><span style='background:#0dcaf0;color:white;padding:4px 8px;border-radius:12px;font-size:12px;'>{user['password']}</span></td>
+                <td style='padding:15px;'>{user['city']}</td>
+            </tr>
+        """
+    
+    html += """
+                </tbody></table>
+            </div>
+            <div style='margin-top:20px;'>
+                <a href='/admin/login-logs' style='background:#198754;color:white;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:10px;'>📊 Login Logs</a>
+                <a href='/admin/stores' style='background:#0d6efd;color:white;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:10px;'>🏪 Stores</a>
+                <a href='/dashboard' style='background:#6c757d;color:white;padding:10px 20px;text-decoration:none;border-radius:6px;'>← Dashboard</a>
+            </div>
+        </div>
+    """
+    return html
+
 
 @app.route("/")
 @login_required
