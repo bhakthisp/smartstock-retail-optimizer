@@ -24,11 +24,11 @@ DB_PORT = int(os.getenv("DB_PORT", 3306))
 DB_NAME = os.getenv("DB_NAME", "smartstock_dynamic")
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "smartstock-super-secret-key-2025")
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_SERVER'] = 'smtp.sendgrid.net'     # 🔥 SENDGRID
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'smartstockretaila@gmail.com'  # Admin sender
-app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')    # From .env
+app.config['MAIL_USERNAME'] = 'apikey'              # 🔥 CRITICAL
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')  # SG.xxx
 mail = Mail(app)  # 🔥 Initialize Mail
 # 🔥 DYNAMIC ENGINE (PostgreSQL + MySQL)
 db_url = os.getenv('DATABASE_URL')
@@ -352,7 +352,7 @@ def live_updater_background():
             products = [(1, 'Demo Product')]
             cities = {1: 'Demo City'}
         print("🚀 Live updater LOOP STARTED! (15s)")
-        SALE_INTERVAL = 30
+        SALE_INTERVAL = 180
         while True:
             now = datetime.now()
             store_row = random.choice(stores)
@@ -430,7 +430,7 @@ def live_updater_background():
             if len(all_alerts) > 10000:
                 all_alerts = all_alerts[-10000:]
             print(f"[{alert['timestamp']}] {alert['city']} / {alert['store']} / {alert['product']} → {alert['stock_alert']} | {alert['forecast']}")
-            time.sleep(15) 
+            time.sleep(180) 
     finally:
         cur.close()
         conn.close()
