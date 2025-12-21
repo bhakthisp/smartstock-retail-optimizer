@@ -435,21 +435,14 @@ def login():
         conn = get_db_conn_raw()
         cursor = get_cursor(conn)
         
-        # 🔥 FIXED: PostgreSQL BOOLEAN
-        cursor.execute("""
-            INSERT INTO login_logs (username, ip_address, success, role) 
-            VALUES (%s, %s, FALSE, 'unknown')
-        """, (username, client_ip))
-        conn.commit()
-        log_id = cursor.lastrowid
-        print(f"LOG ID CREATED: {log_id}")
-        
+        # 🔥 1-QUERY SOLUTION: Insert + Update in ONE transaction
         success = False
-        role = None
+        role = 'unknown'
         storeid = None
         storename = None
         cityid = None
         
+        # CHECK CREDENTIALS FIRST
         if username == "admin" and password == "admin123":
             success = True
             role = "admin"
@@ -466,14 +459,13 @@ def login():
                 role = "store_manager"
                 print(f"✅ STORE LOGIN: {storename}")
         
-        # 🔥 FIXED: success is Python boolean (True/False)
+        # 🔥 SINGLE INSERT with ALL data (NO UPDATE needed!)
         cursor.execute("""
-            UPDATE login_logs 
-            SET success = %s, role = %s, storeid = %s, storename = %s, cityid = %s 
-            WHERE id = %s
-        """, (success, role, storeid, storename, cityid, log_id))
+            INSERT INTO login_logs (username, ip_address, success, role, storeid, storename, cityid)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (username, client_ip, success, role, storeid, storename, cityid))
         conn.commit()
-        print(f"✅ LOG UPDATED ID={log_id} success={success}")
+        print(f"✅ LOGIN LOG SAVED: {username} = {success}")
         
         cursor.close()
         conn.close()
@@ -484,11 +476,14 @@ def login():
                 'storeid': storeid, 'storename': storename, 'cityid': cityid
             }
             login_user(User(**session['user_data']))
+            print(f"🚀 REDIRECT TO DASHBOARD: {username}")
             return redirect(url_for('dashboard'))
         else:
+            print(f"❌ LOGIN FAILED: {username}")
             flash("Invalid credentials!", "danger")
     
     return render_template("login.html")
+
 
 @app.route("/logout")
 @login_required
@@ -629,7 +624,7 @@ def admin_login_logs():
             </table>
         </div>
         <div style='margin-top:25px; text-align:center;'>
-            <a href='/dashboard' style='background:linear-gradient(135deg,#6c757d,#5a6268); color:white; padding:14px 28px; text-decoration:none; border-radius:10px; font-weight:600; font-size:15px; box-shadow:0 4px 15px rgba(108,117,125,0.3); display:inline-block;'>← Back to Dashboard</a>
+            <a href="/" class="btn btn-primary mb-3" style='background:linear-gradient(135deg,#6c757d,#5a6268); color:white; padding:14px 28px; text-decoration:none; border-radius:10px; font-weight:600; font-size:15px; box-shadow:0 4px 15px rgba(108,117,125,0.3); display:inline-block;'>← Back to Dashboard</a>
         </div>
     </div>
     """
