@@ -751,7 +751,7 @@ def admin_login_logs():
                 </tbody></table>
             </div>
             <div style='margin-top:20px;'>
-                <a href='/dashboard' style='background:#6c757d;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:500;'>← Dashboard</a>
+                <a href="/" class="btn btn-primary mb-3">← Dashboard</a>
             </div>
         </div>
     """
