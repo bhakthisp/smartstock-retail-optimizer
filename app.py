@@ -688,22 +688,33 @@ def admin_login_logs():
     
     conn = get_db_conn_raw()
     cursor = get_cursor(conn)
-    cursor.execute("SELECT id, username, role, storeid, storename, ip_address, success, login_time, cityid FROM login_logs ORDER BY login_time DESC LIMIT 50")
+    cursor.execute("""
+        SELECT username, role, storeid, storename, cityname, ip_address, 
+               success, login_time 
+        FROM (
+            SELECT ll.username, ll.role, ll.storeid, ll.storename, 
+                   c.cityname, ll.ip_address, ll.success, ll.login_time,
+                   ROW_NUMBER() OVER (PARTITION BY ll.username ORDER BY ll.login_time DESC) as rn
+            FROM login_logs ll 
+            LEFT JOIN store s ON ll.storeid = s.storeid
+            LEFT JOIN city c ON s.cityid = c.cityid
+        ) ranked 
+        WHERE rn = 1 OR success = TRUE
+        ORDER BY login_time DESC LIMIT 50
+    """)
     logs_raw = cursor.fetchall()
     cursor.close()
     conn.close()
     
-    # 🔥 PERFECT MATCH TO YOUR UI COLORS
     html = """
-    <div style='max-width:1200px; margin:20px auto; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;'>
-        <h2 style='color:#0d6efd; margin-bottom:20px;'>📊 Login Logs (<span style='color:#198754;'>""" + str(len(logs_raw)) + """</span>)</h2>
+    <div style='max-width:1400px; margin:20px auto; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;'>
+        <h2 style='color:#0d6efd; margin-bottom:20px;'>📊 Login Logs (""" + str(len(logs_raw)) + """)</h2>
         <div style='background:white; border-radius:8px; box-shadow:0 0 20px rgba(0,0,0,0.1); overflow:hidden;'>
             <table style='width:100%; border-collapse:collapse;'>
                 <thead>
                     <tr style='background:#0d6efd; color:white;'>
                         <th style='padding:15px; text-align:left;'>Time</th>
                         <th style='padding:15px; text-align:left;'>User</th>
-                        <th style='padding:15px; text-align:left;'>Role</th>
                         <th style='padding:15px; text-align:left;'>Store</th>
                         <th style='padding:15px; text-align:left;'>IP</th>
                         <th style='padding:15px; text-align:left;'>Status</th>
@@ -713,18 +724,31 @@ def admin_login_logs():
     """
     
     for row in logs_raw:
-        status = "✅ SUCCESS" if row[6] else "❌ FAILED"
-        status_color = "#d1e7dd; color:#0f5132;" if row[6] else "#f8d7da; color:#721c24;"
-        role_color = "#0dcaf0" if row[2] == 'store_manager' else "#198754"
+        username, role, storeid, storename, cityname, ip, success, login_time = row
+        
+        # ✅ FIX 1: Store = "City - Store" OR empty for admin
+        if storename and storename != '-':
+            store_display = f"{cityname or 'Unknown'} - {storename}" if cityname else storename
+        else:
+            store_display = "-"
+        
+        # ✅ FIX 2: Status - ONLY failed for wrong credentials
+        if success:
+            status = "✅ SUCCESS"
+            status_color = "#d1e7dd; color:#0f5132;"
+        else:
+            status = "❌ FAILED"
+            status_color = "#f8d7da; color:#721c24;"
         
         html += f"""
                     <tr style='border-bottom:1px solid #dee2e6;'>
-                        <td style='padding:15px;'>{row[7]}</td>
-                        <td style='padding:15px; font-weight:600;'>{row[1]}</td>
-                        <td style='padding:15px;'><span style='background:{role_color}; color:white; padding:4px 8px; border-radius:12px; font-size:12px;'>{row[2]}</span></td>
-                        <td style='padding:15px;'>{row[4] or '-'}</td>
-                        <td style='padding:15px;'>{row[5]}</td>
-                        <td style='padding:15px;'><span style='background:{status_color} padding:4px 8px; border-radius:12px; font-weight:600;'>{status}</span></td>
+                        <td style='padding:15px;'>{login_time}</td>
+                        <td style='padding:15px; font-weight:600;'>{username}</td>
+                        <td style='padding:15px;'>{store_display}</td>
+                        <td style='padding:15px;'>{ip}</td>
+                        <td style='padding:15px;'>
+                            <span style='background:{status_color} padding:4px 8px; border-radius:12px; font-weight:600;'>{status}</span>
+                        </td>
                     </tr>
         """
     
@@ -738,6 +762,7 @@ def admin_login_logs():
     </div>
     """
     return html
+
 
 @app.route("/cities")
 @login_required
