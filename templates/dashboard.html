@@ -1,53 +1,72 @@
 {% extends "base.html" %}
 {% block title %}Dashboard - SmartStock{% endblock %}
 {% block content %}
-<meta http-equiv="refresh" content="15">
+<meta http-equiv="refresh" content="30">
 <div class="row mb-5">
     <div class="col-12">
         <h1 class="display-5 fw-bold mb-1"><i class="fas fa-chart-dashboard text-primary"></i> Live Dashboard</h1>
-        <p class="text-muted mb-4">Real-time inventory alerts • Updated every 15 seconds</p>
+        <p class="text-muted mb-4">Real-time inventory alerts </p>
     </div>
 </div>
 
 <!-- Alert Summary Cards (LIVE COUNTERS) -->
 <div class="row mb-5 g-4">
+    <!-- Understock Card → /understock -->
     <div class="col-md-3">
-        <div class="card glass-card h-100 text-center border-0">
-            <div class="card-body">
-                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
-                <h3 class="fw-bold text-danger" id="understock-count">{{ understock_count }}</h3>
-                <p class="text-muted mb-0">Understock</p>
+        <a href="/understock" class="text-decoration-none">
+            <div class="card glass-card h-100 text-center border-0 hover-shadow transition-all">
+                <div class="card-body d-flex flex-column justify-content-center p-4">
+                    <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                    <h3 class="fw-bold text-danger mb-1" id="understock-count">{{ understock_count }}</h3>
+                    <p class="text-muted mb-0 fs-6">Understock Alerts</p>
+                    <small class="text-danger fw-bold mt-2">Click to View →</small>
+                </div>
             </div>
-        </div>
+        </a>
     </div>
+
+    <!-- Overstock Card → /overstock -->
     <div class="col-md-3">
-        <div class="card glass-card h-100 text-center border-0">
-            <div class="card-body">
-                <i class="fas fa-arrow-up fa-3x text-warning mb-3"></i>
-                <h3 class="fw-bold text-warning" id="overstock-count">{{ overstock_count }}</h3>
-                <p class="text-muted mb-0">Overstock</p>
+        <a href="/overstock" class="text-decoration-none">
+            <div class="card glass-card h-100 text-center border-0 hover-shadow transition-all">
+                <div class="card-body d-flex flex-column justify-content-center p-4">
+                    <i class="fas fa-arrow-up fa-3x text-warning mb-3"></i>
+                    <h3 class="fw-bold text-warning mb-1" id="overstock-count">{{ overstock_count }}</h3>
+                    <p class="text-muted mb-0 fs-6">Overstock Alerts</p>
+                    <small class="text-warning fw-bold mt-2">Click to View →</small>
+                </div>
             </div>
-        </div>
+        </a>
     </div>
+
+    <!-- OK Stock Card → No page, show message -->
     <div class="col-md-3">
-        <div class="card glass-card h-100 text-center border-0">
-            <div class="card-body">
+        <div class="card glass-card h-100 text-center border-0 hover-shadow transition-all cursor-pointer" 
+             onclick="alert('✅ All stocks optimal! No action needed. Check individual stores for details.');">
+            <div class="card-body d-flex flex-column justify-content-center p-4">
                 <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-                <h3 class="fw-bold text-success" id="okstock-count">{{ okstock_count }}</h3>
-                <p class="text-muted mb-0">OK Stock</p>
+                <h3 class="fw-bold text-success mb-1" id="okstock-count">{{ okstock_count }}</h3>
+                <p class="text-muted mb-0 fs-6">OK Stock</p>
+                <small class="text-success fw-bold mt-2">All Optimal ✅</small>
             </div>
         </div>
     </div>
+
+    <!-- Total Alerts Card → /dashboard (refresh) -->
     <div class="col-md-3">
-        <div class="card glass-card h-100 text-center border-0">
-            <div class="card-body">
-                <i class="fas fa-clock fa-3x text-info mb-3"></i>
-                <h3 class="fw-bold text-info" id="total-count">{{ total_count }}</h3>
-                <p class="text-muted mb-0">Total Alerts</p>
+        <a href="/dashboard" class="text-decoration-none">
+            <div class="card glass-card h-100 text-center border-0 hover-shadow transition-all">
+                <div class="card-body d-flex flex-column justify-content-center p-4">
+                    <i class="fas fa-clock fa-3x text-info mb-3"></i>
+                    <h3 class="fw-bold text-info mb-1" id="total-count">{{ total_count }}</h3>
+                    <p class="text-muted mb-0 fs-6">Total Alerts</p>
+                    <small class="text-info fw-bold mt-2">Refresh Dashboard →</small>
+                </div>
             </div>
-        </div>
+        </a>
     </div>
 </div>
+
 
 <!-- Live Alerts Table -->
 <div class="row">

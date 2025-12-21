@@ -76,3 +76,17 @@ body.bg-gradient {
     .glass-card { margin-bottom: 1rem; }
     .navbar-brand { font-size: 1.5rem !important; }
 }
+.hover-shadow {
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+.hover-shadow:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.2) !important;
+}
+.cursor-pointer {
+    cursor: pointer;
+}
+.transition-all {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
