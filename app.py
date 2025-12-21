@@ -643,7 +643,7 @@ def cities_page():
                 SELECT c.cityid, c.cityname, COUNT(s.storeid) as store_count
                 FROM city c 
                 LEFT JOIN store s ON c.cityid = s.cityid 
-                WHERE c.cityname LIKE :s 
+                WHERE c.cityname ILIKE :s  -- 🔥 CASE-INSENSITIVE!
                 GROUP BY c.cityid, c.cityname 
                 ORDER BY c.cityname
             """), engine, params={"s": f"%{search}%"})
@@ -660,7 +660,7 @@ def cities_page():
     except Exception as e:
         print(f"❌ Cities error: {e}")
         return f"<h1>Cities Error: {str(e)}</h1>"
-@app.route("/cities/<int:cityid>/stores")
+
 @login_required
 def city_stores_page(cityid):
     if current_user.role != 'admin':
