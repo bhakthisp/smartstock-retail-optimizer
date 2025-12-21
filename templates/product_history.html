@@ -25,18 +25,24 @@
                         </div>
                         <div class="col-md-2">
                             <label class="form-label fw-bold">🏙️ City</label>
-                            <input type="text" class="form-control glass-input" id="city_input" placeholder="Type 'm'...">
-                            <input type="hidden" name="city" id="city_value">
+                            <div class="position-relative">
+                                <input type="text" class="form-control glass-input" id="city_input" placeholder="Type 'm'...">
+                                <input type="hidden" name="city" id="city_value">
+                            </div>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label fw-bold">🏪 Store</label>
-                            <input type="text" class="form-control glass-input" id="store_input" placeholder="Select city..." disabled>
-                            <input type="hidden" name="store" id="store_value">
+                            <div class="position-relative">
+                                <input type="text" class="form-control glass-input" id="store_input" placeholder="Select city..." disabled>
+                                <input type="hidden" name="store" id="store_value">
+                            </div>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label fw-bold">📦 Product</label>
-                            <input type="text" class="form-control glass-input" id="product_input" placeholder="Select store..." disabled>
-                            <input type="hidden" name="product" id="product_value">
+                            <div class="position-relative">
+                                <input type="text" class="form-control glass-input" id="product_input" placeholder="Select store..." disabled>
+                                <input type="hidden" name="product" id="product_value">
+                            </div>
                         </div>
                         <div class="col-md-2">
                             <button type="submit" class="btn glass-btn btn-lg w-100" id="search_btn" disabled>🔍 SEARCH</button>
@@ -67,7 +73,6 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 let cities = [], stores = [], products = [];
 
@@ -80,32 +85,28 @@ document.getElementById('city_input').addEventListener('input', async function()
         const response = await fetch(`/api/cities?search=${encodeURIComponent(query)}`);
         cities = await response.json();
         
-        const dropdown = createDropdown('city_dropdown', cities.map(c => 
-            `<li onclick="selectCity('${c.cityname}')">${c.cityname} (${c.store_count} stores)</li>`
-        ));
-        dropdown.style.top = '100%';
-        dropdown.style.left = '0';
-        dropdown.style.width = '100%';
+        showDropdown('city_dropdown', cities.map(c => 
+            `<li class="dropdown-item p-2" onclick="selectCity('${c.cityname}')">${c.cityname} (${c.store_count} stores)</li>`
+        ).join(''));
     } catch(e) {
         console.error('City search failed:', e);
     }
 });
 
-function createDropdown(id, items) {
+function showDropdown(id, html) {
     let dropdown = document.getElementById(id);
     if (!dropdown) {
         dropdown = document.createElement('ul');
         dropdown.id = id;
-        dropdown.className = 'list-group position-absolute w-100 shadow mt-1 z-3';
+        dropdown.className = 'list-group position-absolute w-100 shadow mt-1 z-3 bg-white rounded';
         dropdown.style.display = 'none';
         dropdown.style.maxHeight = '200px';
         dropdown.style.overflowY = 'auto';
         dropdown.parentNode.style.position = 'relative';
         dropdown.parentNode.appendChild(dropdown);
     }
-    dropdown.innerHTML = items.join('');
-    dropdown.style.display = items.length ? 'block' : 'none';
-    return dropdown;
+    dropdown.innerHTML = html;
+    dropdown.style.display = html ? 'block' : 'none';
 }
 
 function selectCity(cityname) {
@@ -128,9 +129,9 @@ document.getElementById('store_input').addEventListener('input', async function(
         stores = await response.json();
         const filtered = stores.filter(s => s.storename.toLowerCase().includes(query.toLowerCase()));
         
-        createDropdown('store_dropdown', filtered.map(s => 
-            `<li onclick="selectStore('${s.storename}')">${s.storename}</li>`
-        ));
+        showDropdown('store_dropdown', filtered.map(s => 
+            `<li class="dropdown-item p-2" onclick="selectStore('${s.storename}')">${s.storename}</li>`
+        ).join(''));
     } catch(e) {
         console.error('Store search failed:', e);
     }
@@ -193,3 +194,23 @@ document.getElementById('historySearchForm').addEventListener('submit', async fu
                 </tr>`;
         });
         html += '</tbody></table>';
+        document.getElementById('resultsTable').innerHTML = html;
+    } catch(e) {
+        console.error('Search failed:', e);
+    }
+});
+
+function updateSearchButton() {
+    const hasCity = document.getElementById('city_value').value;
+    const hasStore = document.getElementById('store_value').value;
+    document.getElementById('search_btn').disabled = !(hasCity && hasStore);
+}
+
+// Hide dropdowns on outside click
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.position-relative')) {
+        document.querySelectorAll('[id$="_dropdown"]').forEach(d => d && (d.style.display = 'none'));
+    }
+});
+</script>
+{% endblock %}
