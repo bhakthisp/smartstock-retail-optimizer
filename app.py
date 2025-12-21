@@ -527,23 +527,22 @@ def get_fresh_alerts_from_db(limit=1000):
 def login():
     ensure_tables_exist()
     if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
         client_ip = request.remote_addr or "127.0.0.1"
-        user_agent = request.headers.get("User-Agent", "Unknown")
         
-        print(f"🔓 LOGIN: {username}/{password} from {client_ip}")
+        print(f"🔓 LOGIN ATTEMPT: {username} from {client_ip}")
         
         conn = get_db_conn_raw()
         cursor = get_cursor(conn)
         
-        # 🔥 LOG ATTEMPT (always FALSE first)
+        # 1. LOG ATTEMPT (ALWAYS FALSE first)
         cursor.execute("""
-            INSERT INTO login_logs (username, ip_address, user_agent, success, role) 
-            VALUES (%s, %s, %s, FALSE, 'unknown')
-        """, (username, client_ip, user_agent))
+            INSERT INTO login_logs (username, ip_address, success, role) 
+            VALUES (%s, %s, FALSE, 'unknown')
+        """, (username, client_ip))
         conn.commit()
-        log_id = cursor.lastrowid
+        log_id = cursor.lastrowid  # ✅ GET ID
         
         success = False
         role = None
@@ -551,31 +550,34 @@ def login():
         storename = None
         cityid = None
         
-        # 🔥 ADMIN CHECK
+        # 2. CHECK ADMIN
         if username == "admin" and password == "admin123":
             success = True
             role = "admin"
-            
-        # 🔥 STORE MANAGER CHECK
+            print("✅ ADMIN LOGIN SUCCESS")
+        
+        # 3. CHECK STORE MANAGER
         else:
             cursor.execute("""
-                SELECT storeid, storename, store_manager, cityid 
+                SELECT storeid, storename, cityid 
                 FROM store WHERE store_manager = %s AND password = %s
             """, (username, password))
-            store_user = cursor.fetchone()
-            if store_user:
+            store_row = cursor.fetchone()
+            if store_row:
+                storeid, storename, cityid = store_row
                 success = True
                 role = "store_manager"
-                storeid, storename, _, cityid = store_user
+                print(f"✅ STORE LOGIN: {storename}")
         
-        # 🔥 UPDATE LOG WITH REAL STATUS
+        # 4. 🔥 UPDATE LOG WITH CORRECT STATUS (THIS WAS BROKEN!)
         if log_id:
             cursor.execute("""
                 UPDATE login_logs 
-                SET success = %s, role = %s, storeid = %s, storename = %s, cityid = %s 
+                SET success = %s, role = %s, storeid = %s, storename = %s, cityid = %s
                 WHERE id = %s
-            """, (success, role, storeid, storename, cityid, log_id))
+            """, (bool(success), role, storeid, storename, cityid, log_id))
             conn.commit()
+            print(f"✅ LOG UPDATED: ID={log_id}, success={success}")
         
         cursor.close()
         conn.close()
@@ -587,8 +589,10 @@ def login():
             }
             user_obj = User(**session['user_data'])
             login_user(user_obj)
+            print(f"🚀 LOGIN SUCCESS: {username}")
             return redirect(url_for('dashboard'))
         else:
+            print(f"❌ LOGIN FAILED: {username}")
             flash("Invalid credentials!", "danger")
     
     return render_template("login.html")
@@ -680,35 +684,32 @@ def admin_stores():
 
 @app.route("/admin/login-logs")
 @app.route("/admin/login-logs")
+@app.route("/admin/login-logs")
 @login_required
 def admin_login_logs():
     if current_user.role != 'admin':
         flash("❌ Admin only!", "danger")
         return redirect(url_for('dashboard'))
     
-    # 🔥 IST TIMEZONE FIX
     conn = get_db_conn_raw()
     cursor = get_cursor(conn)
     
-    # ✅ FIXED QUERY - Store names + City + IST time
+    # 🔥 PASTE THIS QUERY HERE (replaces old cursor.execute)
     cursor.execute("""
         SELECT 
             ll.login_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata' as ist_time,
             ll.username,
             CASE 
-                WHEN ll.storename IS NOT NULL AND ll.storename != '' THEN 
-                    COALESCE(c.cityname, 'Unknown') || ' - ' || ll.storename
+                WHEN ll.storename IS NOT NULL AND ll.storename != '' AND ll.storename != '-' THEN 
+                    COALESCE((SELECT cityname FROM city WHERE cityid = ll.cityid), 'Unknown') || ' - ' || ll.storename
                 ELSE '-' 
             END as store_display,
             ll.ip_address,
-            ll.success,
-            ll.role
+            ll.success
         FROM login_logs ll 
-        LEFT JOIN store s ON ll.storeid = s.storeid
-        LEFT JOIN city c ON s.cityid = c.cityid
-        ORDER BY ll.login_time DESC 
-        LIMIT 50
+        ORDER BY ll.login_time DESC LIMIT 50
     """)
+    
     logs = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -718,20 +719,13 @@ def admin_login_logs():
         <h2 style='color:#0d6efd;'>📊 Login Logs (<span style='color:#198754;'>{len(logs)}</span>)</h2>
         <div style='background:white; border-radius:8px; box-shadow:0 0 20px rgba(0,0,0,0.1); overflow:hidden;'>
             <table style='width:100%; border-collapse:collapse;'>
-                <thead>
-                    <tr style='background:#0d6efd; color:white;'>
-                        <th style='padding:15px;'>Time (IST)</th>
-                        <th style='padding:15px;'>User</th>
-                        <th style='padding:15px;'>Store</th>
-                        <th style='padding:15px;'>IP</th>
-                        <th style='padding:15px;'>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
+                <thead><tr style='background:#0d6efd; color:white;'>
+                    <th style='padding:15px;'>Time (IST)</th><th style='padding:15px;'>User</th><th style='padding:15px;'>Store</th><th style='padding:15px;'>IP</th><th style='padding:15px;'>Status</th>
+                </tr></thead><tbody>
     """
     
     for row in logs:
-        ist_time, username, store, ip, success, role = row
+        ist_time, username, store, ip, success = row
         status = "✅ SUCCESS" if success else "❌ FAILED"
         status_color = "#d1e7dd; color:#0f5132;" if success else "#f8d7da; color:#721c24;"
         
@@ -741,22 +735,14 @@ def admin_login_logs():
                 <td style='padding:15px; font-weight:600;'>{username}</td>
                 <td style='padding:15px;'>{store}</td>
                 <td style='padding:15px;'>{ip}</td>
-                <td style='padding:15px;'>
-                    <span style='background:{status_color}padding:4px 8px;border-radius:12px;font-weight:600;'>{status}</span>
-                </td>
+                <td style='padding:15px;'><span style='background:{status_color}padding:4px 8px;border-radius:12px;font-weight:600;'>{status}</span></td>
             </tr>
         """
     
     html += """
-                </tbody></table>
-            </div>
-            <div style='margin-top:20px;'>
-                <a href="/" class="btn btn-primary mb-3">← Dashboard</a>
-            </div>
-        </div>
+                </tbody></table></div><a href='/dashboard' style='background:#6c757d;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:500;display:inline-block;margin-top:20px;'>← Dashboard</a></div>
     """
     return html
-
 
 
 @app.route("/cities")
