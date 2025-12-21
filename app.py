@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
+from flask_mail import Mail, Message  # 🔥 NEW: EMAIL SUPPORT
 from sqlalchemy import create_engine, text
 import os 
 from dotenv import load_dotenv       
@@ -13,6 +14,7 @@ import mysql.connector
 import xgboost as xgb
 import psycopg2  # 🔥 POSTGRESQL SUPPORT
 from urllib.parse import urlparse   # 🔥 POSTGRESQL URL PARSER
+
 # Config - DEPLOYMENT READY
 load_dotenv()
 DB_USER = os.getenv("DB_USER", "root")
@@ -20,9 +22,14 @@ DB_PASS = os.getenv("DB_PASS", "Bhakthi@13")
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = int(os.getenv("DB_PORT", 3306))
 DB_NAME = os.getenv("DB_NAME", "smartstock_dynamic")
-
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "smartstock-super-secret-key-2025")
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'bhakthispgowda13@gmail.com'  # Admin sender
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')    # From .env
+mail = Mail(app)  # 🔥 Initialize Mail
 # 🔥 DYNAMIC ENGINE (PostgreSQL + MySQL)
 db_url = os.getenv('DATABASE_URL')
 if db_url and 'postgres' in db_url:
@@ -250,6 +257,80 @@ def ensure_tables_exist():
         if cur: cur.close()
         if conn: conn.close()
 
+def send_stock_alert_email(alert):
+    """🚨 bhakthispgowda13@gmail.com → YOUR 3 manager emails"""
+    try:
+        conn = get_db_conn_raw()
+        cursor = get_cursor(conn)
+        cursor.execute("""
+            SELECT s.email, s.store_manager, c.cityname, s.storename 
+            FROM store s 
+            JOIN city c ON s.cityid = c.cityid 
+            WHERE s.storeid = %s
+        """, (alert['storeid'],))
+        store_info = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if store_info and store_info[0]:  # Has email
+            manager_email, manager_name, city, store_name = store_info
+            
+            # 🔥 Beautiful HTML email
+            subject = f"🚨 {alert['stock_alert']} - {alert['product']} @ {store_name}"
+            html_body = f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                            color: white; padding: 20px; border-radius: 12px; text-align: center;">
+                    <h1 style="margin: 0; font-size: 28px;">🚨 SmartStock Alert</h1>
+                    <p style="margin: 5px 0 0 0; opacity: 0.9;">From SmartStock Admin</p>
+                </div>
+                
+                <div style="background: #f8f9fa; padding: 25px; border-radius: 12px; margin: 20px 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <h2 style="color: #dc3545; margin-top: 0;">{alert['stock_alert']}</h2>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
+                        <div>
+                            <strong>📍 Store:</strong><br>
+                            <span style="font-size: 18px; color: #495057;">{city} - {store_name}</span>
+                        </div>
+                        <div>
+                            <strong>📦 Product:</strong><br>
+                            <span style="font-size: 18px; color: #495057;">{alert['product']}</span>
+                        </div>
+                    </div>
+                    <div style="background: white; padding: 20px; border-radius: 8px; border-left: 5px solid #dc3545;">
+                        <h3 style="margin-top: 0; color: #dc3545;">
+                            📊 Current Stock: <span style="font-size: 32px; font-weight: bold;">{alert['stock']}</span>
+                        </h3>
+                        <p><strong>💰 Last Sale:</strong> -{alert['sale']} units</p>
+                        <p><strong>👤 Manager:</strong> {manager_name}</p>
+                    </div>
+                </div>
+                
+                <a href="https://smartstock-retail-optimizer.onrender.com/dashboard" 
+                   style="background: #0d6efd; color: white; padding: 15px 30px; 
+                          text-decoration: none; border-radius: 8px; font-weight: bold; 
+                          display: inline-block; box-shadow: 0 4px 12px rgba(13,110,253,0.3);">
+                    👉 View Dashboard Now
+                </a>
+                
+                <p style="text-align: center; color: #6c757d; font-size: 14px; margin-top: 30px;">
+                    This is an automated alert from <strong>SmartStock Inventory Optimizer</strong><br>
+                    Sent from: bhakthispgowda13@gmail.com
+                </p>
+            </div>
+            """
+            msg = Message(
+                subject=subject,
+                sender='bhakthispgowda13@gmail.com',  # Admin
+                recipients=[manager_email],           # Your 3 emails
+                html=html_body
+            )
+            mail.send(msg)
+            print(f"📧 ✅ SENT → {manager_name} ({manager_email}): {alert['stock_alert']}")
+            
+    except Exception as e:
+        print(f"❌ Email failed: {e}")
+
 def live_updater_background():
     global all_alerts
     ensure_tables_exist()
@@ -332,9 +413,20 @@ def live_updater_background():
                 "sale": int(sale_amount),
                 "stock": int(new_stock),
                 "stock_alert": stock_alert,
+                "email_status": "⏳ PENDING", 
                 "forecast": forecast_alert,           # ✅ 🔴Restock Likely
                 "timestamp": now_ist.strftime("%Y-%m-%d %H:%M:%S")  # ✅ 16:30 IST
+                
             }
+            # 🔥 EMAILS FOR BOTH CONDITIONS:
+            if "Restock Needed" in alert['stock_alert'] or "Overstock" in alert['stock_alert']:
+                try:
+                    send_stock_alert_email(alert)
+                    alert["email_status"] = "✅ SENT"  # ✅ Update AFTER success
+                    print(f"📧 ✅ SENT → {alert['store']} ({alert['stock_alert']})")
+                except Exception as e:
+                    alert["email_status"] = "❌ FAILED"
+                    print(f"❌ Email failed: {e}")
             all_alerts.append(alert)
             if len(all_alerts) > 10000:
                 all_alerts = all_alerts[-10000:]
@@ -660,7 +752,7 @@ def cities_page():
     except Exception as e:
         print(f"❌ Cities error: {e}")
         return f"<h1>Cities Error: {str(e)}</h1>"
-
+@app.route("/stores/city/<int:cityid>")
 @login_required
 def city_stores_page(cityid):
     if current_user.role != 'admin':
@@ -737,6 +829,45 @@ def store_products_page(storeid):
     except Exception as e:
         print(f"❌ Store products error: {e}")
         return f"<h1>Store {storeid} Products: Error {str(e)}</h1>"
+    
+@app.route("/email-status")
+@login_required
+def email_status_page():
+    if current_user.role != 'admin':
+        flash("❌ Only admins can view email status!", "danger")
+        return redirect(url_for('dashboard'))
+    
+    try:
+        # 🔥 Get ALL email alerts from last 24h + status
+        df = pd.read_sql(text("""
+            SELECT 
+                a.timestamp,
+                a.city,
+                a.store,
+                a.storeid,
+                a.product,
+                a.stock_alert,
+                CASE 
+                    WHEN a.email_sent = 1 THEN '✅ SENT'
+                    ELSE '❌ PENDING'
+                END as email_status,
+                s.store_manager,
+                s.email as manager_email
+            FROM all_alerts_view a  -- 🔥 Your live alerts table
+            LEFT JOIN store s ON a.storeid = s.storeid
+            WHERE a.timestamp > NOW() - INTERVAL '24 hours'
+            ORDER BY a.timestamp DESC
+            LIMIT 100
+        """), engine)
+        
+        print(f"📧 Email Status: {len(df)} alerts loaded")
+        return render_template("email_status.html", 
+                             alerts=df.to_dict('records'), 
+                             user=current_user)
+    except Exception as e:
+        print(f"❌ Email status error: {e}")
+        return f"<h1>Email Status Error: {str(e)}</h1>"
+
 @app.route("/admin/users")
 @login_required
 def admin_users():
