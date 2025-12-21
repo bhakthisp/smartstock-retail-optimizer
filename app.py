@@ -1049,14 +1049,72 @@ def debug():
         "live_thread_alive": live_thread is not None and live_thread.is_alive() if 'live_thread' in globals() else False,
         "thread_count": threading.active_count()
     })
-@app.route("/debug-smtp")
-def debug_smtp():
+@app.route("/history")
+@login_required
+def product_history_page():
+    if current_user.role != 'admin':
+        flash("❌ Admin only!", "danger")
+        return redirect(url_for('dashboard'))
+    
+    return render_template("product_history.html", user=current_user)
+
+@app.route("/api/history-search")
+@login_required
+def history_search():
+    if current_user.role != 'admin':
+        return jsonify({"error": "Admin only!"}), 403
     try:
-        with mail.connect() as conn:
-            print("✅ SMTP CONNECTED!")
-        return "✅ GMAIL SMTP = WORKING!"
+        date_from = request.args.get("date_from")
+        date_to = request.args.get("date_to", date_from)
+        city = request.args.get("city", "").strip()
+        store = request.args.get("store", "").strip()
+        product = request.args.get("product", "").strip()
+        
+        params = {"sid": store} if store else {}
+        where_clauses = []
+        
+        sql = """
+        SELECT 
+            s.timestamp,
+            s.storeid, st.storename, c.cityname,
+            s.productid, p.productname,
+            s.stock, s.sale_amount,
+            CASE 
+                WHEN s.stock < 5 THEN '🔴 Low Stock'
+                WHEN s.stock > 40 THEN '🟡 Overstock'
+                ELSE '🟢 OK'
+            END as stock_status
+        FROM sales s
+        JOIN store st ON s.storeid = st.storeid
+        JOIN city c ON st.cityid = c.cityid
+        JOIN product p ON s.productid = p.productid
+        WHERE 1=1
+        """
+        
+        if date_from:
+            sql += " AND DATE(s.timestamp) >= :date_from"
+            params["date_from"] = date_from
+        if date_to:
+            sql += " AND DATE(s.timestamp) <= :date_to"
+            params["date_to"] = date_to
+        if city:
+            sql += " AND c.cityname ILIKE :city"
+            params["city"] = f"%{city}%"
+        if store:
+            sql += " AND s.storeid = :sid"
+            params["sid"] = int(store)
+        if product:
+            sql += " AND p.productname ILIKE :product"
+            params["product"] = f"%{product}%"
+            
+        sql += " ORDER BY s.timestamp DESC LIMIT 100"
+        
+        df = pd.read_sql(text(sql), engine, params=params)
+        return jsonify(df.to_dict('records'))
+        
     except Exception as e:
-        return f"❌ SMTP ERROR: {str(e)}"
+        print(f"❌ History search error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))

@@ -41,27 +41,30 @@
                     {% endif %}
                     
                     <a class="nav-link {% if active == 'dashboard' %}active fw-bold{% endif %}" href="/">
-                        <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                        <i class="fas fa-tachometer-alt me-1"></i><B>Dashboard</B>
                     </a>
                     <a class="nav-link {% if active == 'overstock' %}active fw-bold{% endif %}" href="/overstock">
-                        <i class="fas fa-boxes me-1"></i>Overstock
+                        <i class="fas fa-boxes me-1"></i><B>Overstock</B>
                     </a>
                     <a class="nav-link {% if active == 'understock' %}active fw-bold{% endif %}" href="/understock">
-                        <i class="fas fa-exclamation-triangle me-1"></i>Understock
+                        <i class="fas fa-exclamation-triangle me-1"></i><B>Understock</B>
                     </a>
                     <a class="nav-link {% if active == 'cities' %}active fw-bold{% endif %}" href="/cities">
-                        <i class="fas fa-city me-1"></i>Cities
+                        <i class="fas fa-city me-1"></i><B>Cities</B>
                     </a>
                     
                     {% if current_user.role == 'admin' %}
                         <a class="nav-link {% if active == 'admin' %}active fw-bold{% endif %}" href="/admin/stores">
-                            <i class="fas fa-store me-1"></i>Stores (897)
+                            <i class="fas fa-store me-1"></i><B>Stores (897)</B>
                         </a>
                         <a class="nav-link {% if active == 'users' %}active fw-bold{% endif %}" href="/admin/users">
-                            <i class="fas fa-users-cog me-1"></i>Users
+                            <i class="fas fa-users-cog me-1"></i><B>Users</B>
+                        </a>
+                        <a class="nav-link {% if active == 'history' %}active fw-bold{% endif %}" href="/history">
+                             <i class="fas fa-history me-1"></i><B>History</B>
                         </a>
                          <a class="nav-link {% if active == 'emails' %}active fw-bold{% endif %}" href="/email-status">
-                              <i class="fas fa-envelope me-1"></i>Emails
+                              <i class="fas fa-envelope me-1"></i><B>Emails</B>
                         </a>
                     {% endif %}
                     
