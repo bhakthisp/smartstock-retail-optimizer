@@ -429,21 +429,27 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
         client_ip = request.remote_addr or "127.0.0.1"
+        
         print(f"🔓 LOGIN ATTEMPT: {username} from {client_ip}")
+        
         conn = get_db_conn_raw()
         cursor = get_cursor(conn)
+        
+        # 🔥 FIXED: PostgreSQL BOOLEAN
         cursor.execute("""
             INSERT INTO login_logs (username, ip_address, success, role) 
-            VALUES (%s, %s, 0, 'unknown')
+            VALUES (%s, %s, FALSE, 'unknown')
         """, (username, client_ip))
         conn.commit()
         log_id = cursor.lastrowid
         print(f"LOG ID CREATED: {log_id}")
+        
         success = False
         role = None
         storeid = None
         storename = None
         cityid = None
+        
         if username == "admin" and password == "admin123":
             success = True
             role = "admin"
@@ -459,15 +465,19 @@ def login():
                 success = True
                 role = "store_manager"
                 print(f"✅ STORE LOGIN: {storename}")
+        
+        # 🔥 FIXED: success is Python boolean (True/False)
         cursor.execute("""
             UPDATE login_logs 
             SET success = %s, role = %s, storeid = %s, storename = %s, cityid = %s 
             WHERE id = %s
-        """, (int(success), role, storeid, storename, cityid, log_id))
+        """, (success, role, storeid, storename, cityid, log_id))
         conn.commit()
         print(f"✅ LOG UPDATED ID={log_id} success={success}")
+        
         cursor.close()
         conn.close()
+        
         if success:
             session['user_data'] = {
                 'id': storeid or 1, 'username': username, 'role': role,
