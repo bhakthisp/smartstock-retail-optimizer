@@ -327,7 +327,6 @@ def send_stock_alert_email(alert):
             )
             mail.send(msg)
             print(f"📧 ✅ SENT → {manager_name} ({manager_email}): {alert['stock_alert']}")
-            
     except Exception as e:
         print(f"❌ Email failed: {e}")
 
@@ -1050,6 +1049,15 @@ def debug():
         "live_thread_alive": live_thread is not None and live_thread.is_alive() if 'live_thread' in globals() else False,
         "thread_count": threading.active_count()
     })
+@app.route("/debug-smtp")
+def debug_smtp():
+    try:
+        with mail.connect() as conn:
+            print("✅ SMTP CONNECTED!")
+        return "✅ GMAIL SMTP = WORKING!"
+    except Exception as e:
+        return f"❌ SMTP ERROR: {str(e)}"
+
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
     host = os.environ.get('HOST', '0.0.0.0')
