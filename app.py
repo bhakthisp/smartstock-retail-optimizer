@@ -1085,6 +1085,7 @@ def product_history_page():
 def history_search():
     if current_user.role != 'admin':
         return jsonify({"error": "Admin only!"}), 403
+    
     try:
         date_from = request.args.get("date_from")
         date_to = request.args.get("date_to", date_from)
@@ -1095,7 +1096,7 @@ def history_search():
         params = {}
         sql = """
         SELECT 
-            s.dt as timestamp,  # 🔥 YOUR dt column!
+            s.dt as timestamp,
             s.id as record_id,
             s.storeid, st.storename, c.cityname,
             s.productid, p.productname, 
