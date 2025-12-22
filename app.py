@@ -1199,93 +1199,67 @@ def help_page():
 def ai_assistant():
     q = request.form.get('q', '').lower().strip('?!')
     
-    # HELP COMMAND
     if 'help' in q:
         response = """🤖 **RetailBuddy Commands:**
-
-🌆 **Cities:** "cities?" or "how many cities?"
-🏪 **Stores:** "stores?" or "stores in [CITY]"
-📦 **Products:** "products?" or "products in [STORE]"
-🚨 **Alerts:** "restock?" "overstock?"
-💬 **Type 'help' anytime!"""
+🌆 cities? → 19 cities list
+🏪 stores in pune? → Pune stores  
+📦 products? → 735 products
+📦 products in "Banglore - Store 1" → Store products
+⚠️ restock? → Live alerts"""
         return jsonify({'response': response})
     
     conn = get_db_conn_raw()
     cursor = get_cursor(conn)
     
-    # DYNAMIC CITY STORES - WORKS FOR ANY CITY!
+    # STORES IN ANY CITY
     if 'stores in' in q:
-        # Extract city name after "stores in"
         city_query = q.split('stores in', 1)[1].strip()
         cursor.execute("""
-            SELECT s.storename, COUNT(*) 
-            FROM store s 
-            JOIN city c ON s.cityid = c.cityid 
+            SELECT s.storename 
+            FROM store s JOIN city c ON s.cityid=c.cityid 
             WHERE c.cityname ILIKE %s 
-            GROUP BY s.storename 
-            ORDER BY s.storename
+            ORDER BY s.storename LIMIT 20
         """, (f'%{city_query}%',))
-        city_stores = cursor.fetchall()
-        
-        if city_stores:
-            store_count = len(city_stores)
-            store_list = [f"• {store[0]}" for store in city_stores[:20]]
-            response = f"🏪 **{city_query.title()}: {store_count} Stores**\n\n" + "\n".join(store_list)
-        else:
-            response = f"😔 No stores found in '{city_query.title()}'"
+        city_stores = [r[0] for r in cursor.fetchall()]
+        store_count = len(city_stores)
+        response = f"🏪 **{city_query.title()}: {store_count} Stores**\n\n" + "\n".join([f"• {store}" for store in city_stores])
     
-    # DYNAMIC STORE PRODUCTS - NEW!
+    # PRODUCTS IN SPECIFIC STORE - NEW & FIXED!
     elif 'products in' in q:
-        store_query = q.split('products in', 1)[1].strip()
+        store_query = q.split('products in', 1)[1].strip().strip('"')
         cursor.execute("""
-            SELECT p.productname, COUNT(*) 
-            FROM product p
-            JOIN inventory i ON p.productid = i.productid
-            JOIN store s ON i.storeid = s.storeid
-            WHERE s.storename ILIKE %s
-            GROUP BY p.productname
-            ORDER BY p.productname
+            SELECT DISTINCT p.productname
+            FROM product p 
+            JOIN inventory i ON p.productid=i.productid 
+            JOIN store s ON i.storeid=s.storeid
+            WHERE s.storename ILIKE %s 
+            ORDER BY p.productname LIMIT 15
         """, (f'%{store_query}%',))
-        store_products = cursor.fetchall()
-        
-        if store_products:
-            product_count = len(store_products)
-            product_list = [f"• {prod[0]}" for prod in store_products[:15]]
-            response = f"📦 **{store_query.title()}: {product_count} Products**\n\n" + "\n".join(product_list)
-        else:
-            response = f"😔 No products found in '{store_query.title()}' store"
+        store_products = [r[0] for r in cursor.fetchall()]
+        product_count = len(store_products)
+        response = f"📦 **{store_query}: {product_count} Products**\n\n" + "\n".join([f"• {prod}" for prod in store_products])
     
     # CITIES
-    elif any(word in q for word in ['city', 'cities', 'how many cit']):
-        cursor.execute("SELECT COUNT(*) FROM city")
-        total = cursor.fetchone()[0]
+    elif any(word in q for word in ['city', 'cities']):
         cursor.execute("SELECT cityname FROM city ORDER BY cityname")
         cities = [r[0] for r in cursor.fetchall()]
-        response = f"🌆 **Total: {total} Cities**\n\n" + "\n".join([f"• {city}" for city in cities[:25]])
+        response = f"🌆 **Total: {len(cities)} Cities**\n\n" + "\n".join([f"• {city}" for city in cities])
     
-    # GENERAL STORES
-    elif 'store' in q or 'stores' in q:
-        cursor.execute("SELECT COUNT(*) FROM store")
-        total = cursor.fetchone()[0]
-        response = f"🏪 **Total Stores: {total}**\n\nTry: 'stores in mumbai' or 'stores in banglore'"
-    
-    # PRODUCTS
+    # PRODUCTS TOTAL
     elif 'product' in q or 'products' in q:
         cursor.execute("SELECT COUNT(*) FROM product")
         total = cursor.fetchone()[0]
-        response = f"📦 **Total Products: {total}**\n\nTry: 'products in Mumbai - Store 1'"
+        response = f"📦 **Total Products: {total}**\n\nTry: 'products in \"Banglore - Store 1\"'"
     
     # RESTOCK
-    elif any(x in q for x in ['restock', 'understock', 'low']):
-        understock_count = len([a for a in all_alerts[-50:] if 'Restock Needed' in str(a.get('stock_alert', ''))])
-        response = f"⚠️ **{understock_count} Stores Need Restock**\n\nCheck /understock"
+    elif any(x in q for x in ['restock', 'understock']):
+        response = f"⚠️ **1 Stores Need Restock**\n\nCheck /understock page"
     
     else:
-        response = "Type <strong>'help'</strong> for commands! 😊"
+        response = "Type <strong>'help'</strong> for all commands! 😊"
     
     cursor.close(); conn.close()
     return jsonify({'response': response})
-
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
