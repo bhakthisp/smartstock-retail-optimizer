@@ -1202,70 +1202,23 @@ def ai_assistant():
         conn = get_db_conn_raw()
         cursor = get_cursor(conn)
         
-        # HELP - ALL NAVIGATION + QUERIES
+        # HELP
         if 'help' in q:
-            response = """🤖 **RetailBuddy - Full Navigation:**
+            response = """🤖 **RetailBuddy Commands:**
 
-**🏠 Type for instant navigation:**
-• dashboard → [Dashboard](/)
-• overstock → [Overstock](/overstock)
-• understock → [Understock](/understock)
-• cities → [Cities](/cities)
-• stores → [Stores](/admin/stores)
-• users → [Users](/admin/users)
-• history → [History](/history)
-• emails → [Emails](/email-status)
-• logout → [Logout](/logout)
-
-**🌆 Smart Queries:**
-• "stores in pune"
-• "products in Store 1"
-• "total cities"
-• "restock?"""
-            cursor.close(); conn.close()
+🏠 **Navigation:** dashboard | overstock | cities | stores
+🌆 **Queries:** stores in pune | products in Store 1 | total cities | restock?"""
             return jsonify({'response': response})
         
-        # ALL 9 NAVIGATION PAGES
-        nav_pages = {
-            'dashboard': ('🏠 Dashboard', '/'),
-            'overstock': ('📈 Overstock', '/overstock'),
-            'understock': ('⚠️ Understock', '/understock'),
-            'cities': ('🌆 Cities', '/cities'),
-            'stores': ('🏪 Stores', '/admin/stores'),
-            'users': ('👥 Users', '/admin/users'),
-            'history': ('📋 History', '/history'),
-            'emails': ('📧 Emails', '/email-status'),
-            'logout': ('🚪 Logout', '/logout')
-        }
-        
-        for cmd, (title, url) in nav_pages.items():
-            if cmd in q:
-                response = f"**{title}:** [Click Here]({url})"
-                cursor.close(); conn.close()
-                return jsonify({'response': response})
-        
-        # TOTAL COUNTS
-        if 'total no of cities' in q or 'total cities' in q:
-            cursor.execute("SELECT COUNT(DISTINCT cityname) FROM city")
+        # TOTAL CITIES COUNT
+        if 'total cities' in q or 'total no of cities' in q:
+            cursor.execute("SELECT COUNT(*) FROM city")
             total = cursor.fetchone()[0]
-            response = f"🌆 **Total Cities: {total}**\n\n[Cities Page](/cities)"
-        
-        elif 'total stores' in q:
-            cursor.execute("SELECT COUNT(*) FROM store")
-            total = cursor.fetchone()[0]
-            response = f"🏪 **Total Stores: {total}**\n\n[All Stores](/admin/stores)"
-        
-        # LIST CITIES
-        elif any(x in q for x in ['cities list', 'list cities', 'show cities', 'all cities']):
-            cursor.execute("SELECT DISTINCT cityname FROM city ORDER BY cityname ASC")
+            cursor.execute("SELECT cityname FROM city ORDER BY cityname")
             cities = [r[0] for r in cursor.fetchall()]
-            total_cities = len(cities)
-            response = f"🌆 **{total_cities} Cities:**\n\n" + "\n".join([f"• {city}" for city in cities[:25]])
-            if total_cities > 25:
-                response += f"\n\n...and {total_cities-25} more"
-            response += "\n\n[Cities](/cities)"
+            response = f"🌆 **Total: {total} Cities**\n\n" + "\n".join([f"• {city}" for city in cities[:20]])
         
-        # STORES IN SPECIFIC CITY
+        # STORES IN CITY
         elif 'stores in' in q:
             city_name = q.split('stores in', 1)[1].strip()
             cursor.execute("""
@@ -1276,11 +1229,9 @@ def ai_assistant():
             """, (f'%{city_name}%',))
             stores = [r[0] for r in cursor.fetchall()]
             count = len(stores)
-            response = f"🏪 **{city_name.title()}: {count} Stores**\n\n"
-            response += "\n".join([f"• {store}" for store in stores])
-            response += f"\n\n[All Stores](/admin/stores)"
+            response = f"🏪 **{city_name.title()}: {count} Stores**\n\n" + "\n".join([f"• {store}" for store in stores])
         
-        # PRODUCTS IN SPECIFIC STORE - FIXED!
+        # PRODUCTS IN STORE
         elif 'products in' in q:
             store_name = q.split('products in', 1)[1].strip().strip('"')
             cursor.execute("""
@@ -1289,43 +1240,48 @@ def ai_assistant():
                 JOIN inventory i ON p.productid = i.productid 
                 JOIN store s ON i.storeid = s.storeid
                 WHERE LOWER(s.storename) LIKE %s
-                ORDER BY p.productname LIMIT 15
+                LIMIT 15
             """, (f'%{store_name}%',))
             products = [r[0] for r in cursor.fetchall()]
             count = len(products)
-            if count:
-                response = f"📦 **{store_name.title()}: {count} Products**\n\n"
-                response += "\n".join([f"• {prod}" for prod in products])
-            else:
-                response = f"😔 No products found for '{store_name}'\n\nTry: 'products in Pune - Store 1'"
+            response = f"📦 **{store_name}: {count} Products**\n\n" + "\n".join([f"• {prod}" for prod in products])
         
-        # RESTOCK - REAL DATABASE COUNT
+        # RESTOCK - SIMPLIFIED QUERY
         elif 'restock' in q:
             cursor.execute("""
-                SELECT COUNT(DISTINCT i.storeid)
-                FROM inventory i 
-                JOIN store s ON i.storeid = s.storeid
-                WHERE i.stockquantity < i.reorderlevel
+                SELECT COUNT(*) FROM inventory 
+                WHERE stockquantity < reorderlevel
             """)
             count = cursor.fetchone()[0]
-            response = f"⚠️ **{count} Stores Need Restock**\n\n[Understock](/understock)"
+            response = f"⚠️ **{count} Items Need Restock**\n\nGo to /understock"
         
+        # NAVIGATION - AFTER ALL QUERIES
+        elif 'dashboard' in q:
+            response = '<a href="/" style="color:#667eea;font-weight:bold;">🏠 Dashboard</a>'
+        elif 'overstock' in q:
+            response = '<a href="/overstock" style="color:#667eea;font-weight:bold;">📈 Overstock</a>'
+        elif 'understock' in q:
+            response = '<a href="/understock" style="color:#667eea;font-weight:bold;">⚠️ Understock</a>'
+        elif 'cities' in q:
+            response = '<a href="/cities" style="color:#667eea;font-weight:bold;">🌆 Cities</a>'
+        elif 'stores' in q:
+            response = '<a href="/admin/stores" style="color:#667eea;font-weight:bold;">🏪 Stores</a>'
+        elif 'users' in q:
+            response = '<a href="/admin/users" style="color:#667eea;font-weight:bold;">👥 Users</a>'
         else:
-            response = "Type **'help'** for all commands! 😊"
+            response = "Type **help** for commands! 😊"
     
     except Exception as e:
-        response = f"😔 Database error. Try again!"
-        print(f"AI Error: {str(e)}")  # Debug log
+        response = f"Error: {str(e)[:50]}"
+        print(f"AI ERROR: {e}")
     
     finally:
         try:
-            cursor.close()
-            conn.close()
-        except:
-            pass
+            if 'cursor' in locals(): cursor.close()
+            if 'conn' in locals(): conn.close()
+        except: pass
     
     return jsonify({'response': response})
-
 
 
 if __name__ == "__main__":
