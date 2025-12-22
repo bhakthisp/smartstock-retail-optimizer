@@ -1194,6 +1194,54 @@ def help_page():
     cities = [{'cityname':r[0],'store_count':r[1]} for r in cursor.fetchall()]
     cursor.close(); conn.close()
     return render_template("help.html", stores=stores, cities=cities)
+# 🔥 ADD YOUR AI ASSISTANT ROUTE HERE (after other routes, before if __name__ == "__main__":)
+
+@app.route('/ai', methods=['POST'])
+def ai_assistant():
+    q = request.form.get('q', '').lower()
+    conn = get_db_conn_raw()
+    cursor = get_cursor(conn)
+    
+    if 'city' in q:
+        cursor.execute("SELECT COUNT(*) FROM city")
+        cities = cursor.fetchone()[0]
+        cursor.execute("SELECT cityname FROM city ORDER BY cityname LIMIT 10")
+        citylist = [r[0] for r in cursor.fetchall()]
+        response = f"🌆 **Total: {cities} cities**\n" + ' • '.join(citylist)
+    
+    elif 'store' in q or 'stores' in q:
+        cursor.execute("SELECT COUNT(*) FROM store")
+        stores = cursor.fetchone()[0]
+        cursor.execute("SELECT c.cityname, s.storename FROM store s JOIN city c ON s.cityid=c.cityid LIMIT 10")
+        storelist = [f"{r[0]} - {r[1]}" for r in cursor.fetchall()]
+        response = f"🏪 **Total: {stores} stores**\n" + '\n'.join(storelist)
+    
+    elif 'product' in q or 'products' in q:
+        cursor.execute("SELECT COUNT(*) FROM product")
+        products = cursor.fetchone()[0]
+        cursor.execute("SELECT productname FROM product LIMIT 10")
+        prodlist = [r[0] for r in cursor.fetchall()]
+        response = f"📦 **Total: {products} products**\n" + ', '.join(prodlist)
+    
+    elif 'restock' in q or 'understock' in q or 'low' in q:
+        under = len([a for a in all_alerts[-20:] if 'Restock Needed' in a.get('stock_alert', '')])
+        response = f"⚠️ **{under} stores need restock now**\nCheck /understock"
+    
+    elif 'overstock' in q:
+        over = len([a for a in all_alerts[-20:] if 'Overstock' in a.get('stock_alert', '')])
+        response = f"🔴 **{over} overstock alerts**\nCheck /overstock"
+    
+    else:
+        response = """🤖 **Ask me:**
+• "cities?" → Total + list
+• "stores?" → Total + samples  
+• "products?" → Total count
+• "restock?" → Live understock
+• "overstock?" → Live alerts"""
+    
+    cursor.close(); conn.close()
+    return jsonify({'response': response})
+
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
