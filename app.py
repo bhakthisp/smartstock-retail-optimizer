@@ -910,6 +910,7 @@ def admin_users():
         flash("❌ Admin only!", "danger")
         return redirect(url_for('dashboard'))
     dashboard_url = url_for('dashboard')
+    print("DEBUG dashboard_url =", dashboard_url)
     conn = get_db_conn_raw()
     cursor = get_cursor(conn)
     cursor.execute("""
@@ -958,7 +959,7 @@ def admin_users():
             </tr>
         """
     
-    html += """
+    html += f"""
                 </tbody>
             </table>
         </div>
