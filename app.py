@@ -1232,12 +1232,13 @@ def ai_assistant():
             response = f"🏪 **{city_name.title()}: {count} Stores**\n\n" + "\n".join([f"• {store}" for store in stores])
         
         # PRODUCTS IN STORE
+        # PRODUCTS IN STORE - FIXED!
         elif 'products in' in q:
             store_name = q.split('products in', 1)[1].strip().strip('"')
             cursor.execute("""
                 SELECT DISTINCT p.productname 
                 FROM product p 
-                JOIN inventory i ON p.productid = i.productid 
+                JOIN stock i ON p.productid = i.productid 
                 JOIN store s ON i.storeid = s.storeid
                 WHERE LOWER(s.storename) LIKE %s
                 LIMIT 15
@@ -1245,16 +1246,16 @@ def ai_assistant():
             products = [r[0] for r in cursor.fetchall()]
             count = len(products)
             response = f"📦 **{store_name}: {count} Products**\n\n" + "\n".join([f"• {prod}" for prod in products])
-        
+
         # RESTOCK - SIMPLIFIED QUERY
         elif 'restock' in q:
             cursor.execute("""
-                SELECT COUNT(*) FROM inventory 
-                WHERE stockquantity < reorderlevel
+                SELECT COUNT(*) FROM stock 
+                WHERE quantity < reorder_level
             """)
             count = cursor.fetchone()[0]
             response = f"⚠️ **{count} Items Need Restock**\n\nGo to /understock"
-        
+                
         # NAVIGATION - AFTER ALL QUERIES
         elif 'dashboard' in q:
             response = '<a href="/" style="color:#667eea;font-weight:bold;">🏠 Dashboard</a>'
