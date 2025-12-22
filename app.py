@@ -357,6 +357,22 @@ def live_updater_background():
     conn = get_db_conn_raw()
     cur = get_cursor(conn)
     try:
+        cur.execute("SELECT created_at FROM sales LIMIT 1")
+        cur.fetchone()
+        print("✅ created_at column exists!")
+    except:
+        print("🔧 Adding created_at column...")
+        cur.execute("ALTER TABLE sales ADD COLUMN created_at TIMESTAMP")
+        cur.execute("""
+            UPDATE sales SET created_at = NOW() - (id * INTERVAL '1 second')
+        """)  # Backfill: id=1=oldest, id=1000000=today
+        conn.commit()
+        print("✅ created_at added + backfilled!")
+    cur.close()
+    conn.close()
+    conn = get_db_conn_raw()
+    cur = get_cursor(conn)
+    try:
         cur.execute("SELECT productid, productname FROM product")
         products = cur.fetchall() or []
         cur.execute("SELECT storeid, storename, cityid FROM store")
