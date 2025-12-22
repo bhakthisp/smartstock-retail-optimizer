@@ -1199,13 +1199,34 @@ def help_page():
 def ai_assistant():
     q = request.form.get('q', '').lower().strip('?!')
     
+    # 🏠 COMPLETE NAVIGATION (ALL 9 PAGES)
+    nav_commands = {
+        'dashboard': '/',
+        'overstock': '/overstock',
+        'understock': '/understock',
+        'cities': '/cities',
+        'stores': '/admin/stores',
+        'users': '/admin/users',
+        'history': '/history',
+        'emails': '/email-status',
+        'logout': '/logout'
+    }
+    
+    for cmd, url in nav_commands.items():
+        if cmd in q:
+            return jsonify({'redirect': url})
+    
+    # HELP - SHOW ALL NAVIGATION
     if 'help' in q:
-        response = """🤖 **RetailBuddy Commands:**
-🌆 cities? → 19 cities list
-🏪 stores in pune? → Pune stores  
-📦 products? → 735 products
-📦 products in "Banglore - Store 1" → Store products
-⚠️ restock? → Live alerts"""
+        response = """🤖 RetailBuddy - Full Navigation:
+
+🏠 Pages: dashboard | overstock | understock | cities | stores | users | history | emails | logout
+
+🌆 Queries:
+• "stores in pune" → Pune stores
+• "products in Pune - Store 1" → Store products
+• "list cities?" → 19 cities list
+• restock? → Live alerts"""
         return jsonify({'response': response})
     
     conn = get_db_conn_raw()
@@ -1217,46 +1238,49 @@ def ai_assistant():
         cursor.execute("""
             SELECT s.storename 
             FROM store s JOIN city c ON s.cityid=c.cityid 
-            WHERE c.cityname ILIKE %s 
+            WHERE LOWER(c.cityname) LIKE %s 
             ORDER BY s.storename LIMIT 20
         """, (f'%{city_query}%',))
         city_stores = [r[0] for r in cursor.fetchall()]
         store_count = len(city_stores)
-        response = f"🏪 **{city_query.title()}: {store_count} Stores**\n\n" + "\n".join([f"• {store}" for store in city_stores])
+        response = f"🏪 {city_query.title()}: {store_count} Stores\n\n" + "\n".join([f"• {store}" for store in city_stores])
     
-    # PRODUCTS IN SPECIFIC STORE - NEW & FIXED!
+    # PRODUCTS IN SPECIFIC STORE
     elif 'products in' in q:
-        store_query = q.split('products in', 1)[1].strip().strip('"')
+        store_query = q.split('products in', 1)[1].strip().strip('"').strip()
         cursor.execute("""
             SELECT DISTINCT p.productname
             FROM product p 
             JOIN inventory i ON p.productid=i.productid 
             JOIN store s ON i.storeid=s.storeid
-            WHERE s.storename ILIKE %s 
+            WHERE LOWER(s.storename) LIKE %s 
             ORDER BY p.productname LIMIT 15
         """, (f'%{store_query}%',))
         store_products = [r[0] for r in cursor.fetchall()]
         product_count = len(store_products)
-        response = f"📦 **{store_query}: {product_count} Products**\n\n" + "\n".join([f"• {prod}" for prod in store_products])
+        if product_count:
+            response = f"📦 {store_query}: {product_count} Products\n\n" + "\n".join([f"• {prod}" for prod in store_products])
+        else:
+            response = f"😔 No products found in '{store_query}'"
     
-    # CITIES
-    elif any(word in q for word in ['city', 'cities']):
+    # LIST CITIES
+    elif any(x in q for x in ['list cities', 'show cities']):
         cursor.execute("SELECT cityname FROM city ORDER BY cityname")
         cities = [r[0] for r in cursor.fetchall()]
-        response = f"🌆 **Total: {len(cities)} Cities**\n\n" + "\n".join([f"• {city}" for city in cities])
+        response = f"🌆 Total: {len(cities)} Cities\n\n" + "\n".join([f"• {city}" for city in cities])
     
-    # PRODUCTS TOTAL
-    elif 'product' in q or 'products' in q:
+    # TOTAL PRODUCTS
+    elif 'products?' in q:
         cursor.execute("SELECT COUNT(*) FROM product")
         total = cursor.fetchone()[0]
-        response = f"📦 **Total Products: {total}**\n\nTry: 'products in \"Banglore - Store 1\"'"
+        response = f"📦 **Total Products: {total}**\n\nTry: 'products in Pune - Store 1'"
     
     # RESTOCK
     elif any(x in q for x in ['restock', 'understock']):
-        response = f"⚠️ **1 Stores Need Restock**\n\nCheck /understock page"
+        response = f"⚠️ 1 Stores Need Restock\n\nCheck /understock page"
     
     else:
-        response = "Type <strong>'help'</strong> for all commands! 😊"
+        response = "Type <strong>'help'</strong> for ALL pages & commands! 😊"
     
     cursor.close(); conn.close()
     return jsonify({'response': response})

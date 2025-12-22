@@ -159,7 +159,6 @@ document.addEventListener('DOMContentLoaded',()=>{
     const chat=document.getElementById('smartbot-chat');
     const close=document.getElementById('smartbot-close');
     
-    // 🔹 CIRCLE CLICK → OPEN ONLY
     toggle.onclick=()=>{
         chat.classList.add('open');
         if(!hasGreeted){
@@ -168,12 +167,12 @@ document.addEventListener('DOMContentLoaded',()=>{
         }
     };
     
-    // 🔹 × CLICK → CLOSE PERFECTLY
     close.onclick=()=>{
         chat.classList.remove('open');
     };
 });
 
+// 🔥 UPDATED sendMsg() WITH REDIRECT
 async function sendMsg(){
     const input=document.getElementById('smartbot-input');
     const q=input.value.trim();
@@ -184,10 +183,19 @@ async function sendMsg(){
     try{
         const res=await fetch('/ai',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'q='+encodeURIComponent(q)});
         const data=await res.json();
+        
+        // CHECK FOR REDIRECT 🚀
+        if(data.redirect){
+            window.location.href = data.redirect;
+            return;
+        }
+        
         addMsg('🤖 RetailBuddy',data.response,true);
     }catch(e){
         addMsg('🤖 RetailBuddy','Sorry, try again!',true);
     }
+    
+    document.getElementById('smartbot-messages').scrollTop = document.getElementById('smartbot-messages').scrollHeight;
 }
 
 function addMsg(sender,text,isAI){
@@ -201,6 +209,7 @@ function addMsg(sender,text,isAI){
 
 document.getElementById('smartbot-input').addEventListener('keypress',e=>e.key==='Enter'?sendMsg():0);
 </script>
+
 
 </body>
 </html>
