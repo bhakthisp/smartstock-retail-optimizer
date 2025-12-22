@@ -1194,6 +1194,7 @@ def help_page():
     cities = [{'cityname':r[0],'store_count':r[1]} for r in cursor.fetchall()]
     cursor.close(); conn.close()
     return render_template("help.html", stores=stores, cities=cities)
+
 @app.route('/ai', methods=['POST'])
 def ai_assistant():
     q = request.form.get('q', '').lower().strip('?!')
@@ -1204,11 +1205,22 @@ def ai_assistant():
         
         # HELP
         if 'help' in q:
-            response = """🤖 **RetailBuddy Commands:**
+            response = """🤖 RetailBuddy Commands:
 
-🏠 **Navigation:** dashboard | overstock | cities | stores
-🌆 **Queries:** stores in pune | products in Store 1 | total cities | restock?"""
+🏠 Navigation: dashboard | overstock | cities | stores | users | history | emails
+🌆 Queries: stores in city_name | products in store_name | total cities | restock?"""
             return jsonify({'response': response})
+        if 'understock count' in q or 'understock' in q:
+            understock_count = len([a for a in all_alerts if "Restock Needed" in str(a.get('stock_alert', ''))])
+            response = f"⚠️ {understock_count} Understock Alerts\n\n[View Understock](/understock)"
+        
+        elif 'overstock count' in q or 'overstock' in q:
+            overstock_count = len([a for a in all_alerts if "Overstock" in str(a.get('stock_alert', ''))])
+            response = f"📈 {overstock_count} Overstock Alerts\n\n[View Overstock](/overstock)"
+        
+        elif 'ok stock count' in q or 'ok stock' in q:
+            okstock_count = len([a for a in all_alerts if "Stock OK" in str(a.get('stock_alert', ''))])
+            response = f"✅ {okstock_count} OK Stock\n\n[Dashboard](/)"
         
         # TOTAL CITIES COUNT
         if 'total cities' in q or 'total no of cities' in q:
@@ -1216,7 +1228,7 @@ def ai_assistant():
             total = cursor.fetchone()[0]
             cursor.execute("SELECT cityname FROM city ORDER BY cityname")
             cities = [r[0] for r in cursor.fetchall()]
-            response = f"🌆 **Total: {total} Cities**\n\n" + "\n".join([f"• {city}" for city in cities[:20]])
+            response = f"🌆 Total: {total} Cities\n\n" + "\n".join([f"• {city}" for city in cities[:20]])
         
         # STORES IN CITY
         elif 'stores in' in q:
@@ -1229,53 +1241,53 @@ def ai_assistant():
             """, (f'%{city_name}%',))
             stores = [r[0] for r in cursor.fetchall()]
             count = len(stores)
-            response = f"🏪 **{city_name.title()}: {count} Stores**\n\n" + "\n".join([f"• {store}" for store in stores])
-        
-        # PRODUCTS IN STORE
-        # PRODUCTS IN STORE - USE 'sales' TABLE!
+            response = f"🏪 {city_name.title()}: {count} Stores\n\n" + "\n".join([f"• {store}" for store in stores])
+       
         elif 'products in' in q:
             store_name = q.split('products in', 1)[1].strip().strip('"')
-            cursor.execute("""
-                SELECT DISTINCT p.productname 
-                FROM product p 
-                JOIN sales s ON p.productid = s.productid 
-                JOIN store st ON s.storeid = st.storeid
-                WHERE LOWER(st.storename) LIKE %s
-                LIMIT 15
-            """, (f'%{store_name}%',))
-            products = [r[0] for r in cursor.fetchall()]
-            count = len(products)
+            store_products = []
+            for alert in all_alerts[-100:]:  # Last 100 alerts
+                if store_name.lower() in str(alert.get('store', '')).lower():
+                    store_products.append(alert.get('product', 'Unknown'))
+            store_products = list(set(store_products))[:10]  # Unique, top 10
+            count = len(store_products)
             if count:
-                response = f"📦 **{store_name}: {count} Products**\n\n" + "\n".join([f"• {prod}" for prod in products])
+                response = f"📦 **{store_name}: {count} Products**\n\n" + "\n".join([f"• {prod}" for prod in store_products])
             else:
-                response = f"😔 No products data for '{store_name}'"
-
-        # RESTOCK - USE 'sales' TABLE STOCK COLUMN!
+                cursor.execute("SELECT productname FROM product LIMIT 10")
+                demo_products = [r[0] for r in cursor.fetchall()]
+                response = f"😔 No recent data for '{store_name}'\n\n📦 Sample products:\n" + "\n".join([f"• {p}" for p in demo_products])
+        
+        # RESTOCK SUMMARY
         elif 'restock' in q:
-            cursor.execute("""
-                SELECT COUNT(*) 
-                FROM sales s 
-                JOIN store st ON s.storeid = st.storeid
-                WHERE s.stock < 10  -- Low stock threshold
-            """)
-            count = cursor.fetchone()[0]
-            response = f"⚠️ **{count} Low Stock Items**\n\nCheck /understock"
+            understock_count = len([a for a in all_alerts if "Restock Needed" in str(a.get('stock_alert', ''))])
+            overstock_count = len([a for a in all_alerts if "Overstock" in str(a.get('stock_alert', ''))])
+            okstock_count = len([a for a in all_alerts if "Stock OK" in str(a.get('stock_alert', ''))])
+            response = f"""⚠️ **Stock Summary:**
+            🔴 Understock: {understock_count}
+            🟡 Overstock: {overstock_count}
+            🟢 OK Stock: {okstock_count}
+            📊 Total: {len(all_alerts)} alerts"""
 
         # NAVIGATION - AFTER ALL QUERIES
         elif 'dashboard' in q:
-            response = '<a href="/" style="color:#667eea;font-weight:bold;">🏠 Dashboard</a>'
+            response = '<a href="/" style="color:white;font-weight:bold;">🏠 Dashboard</a>'
         elif 'overstock' in q:
-            response = '<a href="/overstock" style="color:#667eea;font-weight:bold;">📈 Overstock</a>'
+            response = '<a href="/overstock" style="color:white;font-weight:bold;">📈 Overstock</a>'
         elif 'understock' in q:
-            response = '<a href="/understock" style="color:#667eea;font-weight:bold;">⚠️ Understock</a>'
+            response = '<a href="/understock" style="color:white;font-weight:bold;">⚠️ Understock</a>'
         elif 'cities' in q:
-            response = '<a href="/cities" style="color:#667eea;font-weight:bold;">🌆 Cities</a>'
+            response = '<a href="/cities" style="color:white;font-weight:bold;">🌆 Cities</a>'
         elif 'stores' in q:
-            response = '<a href="/admin/stores" style="color:#667eea;font-weight:bold;">🏪 Stores</a>'
+            response = '<a href="/admin/stores" style="color:white;font-weight:bold;">🏪 Stores</a>'
         elif 'users' in q:
-            response = '<a href="/admin/users" style="color:#667eea;font-weight:bold;">👥 Users</a>'
+            response = '<a href="/admin/users" style="color:white;font-weight:bold;">👥 Users</a>'
+        elif 'history' in q:
+            response = '<a href="/admin/history" style="color:white;font-weight:bold;">👥 Users</a>'
+        elif 'emails' in q:
+            response = '<a href="/admin/emails" style="color:white;font-weight:bold;">👥 Users</a>'
         else:
-            response = "Type **help** for commands! 😊"
+            response = "Type help for commands! 😊"
     
     except Exception as e:
         response = f"Error: {str(e)[:50]}"
