@@ -1184,6 +1184,16 @@ def api_store_products():
         WHERE s.storeid = :storeid
     """), engine, params={"storeid": int(storeid)})
     return jsonify(df.to_dict('records'))
+@app.route("/help")
+def help_page():
+    conn = get_db_conn_raw()
+    cursor = get_cursor(conn)
+    cursor.execute("SELECT s.storename, s.store_manager, s.password, c.cityname FROM store s JOIN city c ON s.cityid = c.cityid")
+    stores = [{'storename':r[0],'store_manager':r[1],'password':r[2],'cityname':r[3]} for r in cursor.fetchall()]
+    cursor.execute("SELECT c.cityname, COUNT(s.storeid) FROM city c LEFT JOIN store s ON c.cityid = s.cityid GROUP BY c.cityname")
+    cities = [{'cityname':r[0],'store_count':r[1]} for r in cursor.fetchall()]
+    cursor.close(); conn.close()
+    return render_template("help.html", stores=stores, cities=cities)
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))

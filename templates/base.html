@@ -8,6 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/theme.css') }}" rel="stylesheet">
+    <script src='https://www.noupe.com/embed/019b44a7f0b47dcaba37ef8f77c4df56f492.js'></script>
 </head>
 <body class="bg-gradient min-vh-100">
     <!-- 🌙 THEME TOGGLE BUTTON (Top Right) -->
@@ -52,6 +53,7 @@
                     <a class="nav-link {% if active == 'cities' %}active fw-bold{% endif %}" href="/cities">
                         <i class="fas fa-city me-1"></i><B>Cities</B>
                     </a>
+                    
                     
                     {% if current_user.role == 'admin' %}
                         <a class="nav-link {% if active == 'admin' %}active fw-bold{% endif %}" href="/admin/stores">
