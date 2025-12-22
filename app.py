@@ -1232,30 +1232,35 @@ def ai_assistant():
             response = f"🏪 **{city_name.title()}: {count} Stores**\n\n" + "\n".join([f"• {store}" for store in stores])
         
         # PRODUCTS IN STORE
-        # PRODUCTS IN STORE - FIXED!
+        # PRODUCTS IN STORE - USE 'sales' TABLE!
         elif 'products in' in q:
             store_name = q.split('products in', 1)[1].strip().strip('"')
             cursor.execute("""
                 SELECT DISTINCT p.productname 
                 FROM product p 
-                JOIN stock i ON p.productid = i.productid 
-                JOIN store s ON i.storeid = s.storeid
-                WHERE LOWER(s.storename) LIKE %s
+                JOIN sales s ON p.productid = s.productid 
+                JOIN store st ON s.storeid = st.storeid
+                WHERE LOWER(st.storename) LIKE %s
                 LIMIT 15
             """, (f'%{store_name}%',))
             products = [r[0] for r in cursor.fetchall()]
             count = len(products)
-            response = f"📦 **{store_name}: {count} Products**\n\n" + "\n".join([f"• {prod}" for prod in products])
+            if count:
+                response = f"📦 **{store_name}: {count} Products**\n\n" + "\n".join([f"• {prod}" for prod in products])
+            else:
+                response = f"😔 No products data for '{store_name}'"
 
-        # RESTOCK - SIMPLIFIED QUERY
+        # RESTOCK - USE 'sales' TABLE STOCK COLUMN!
         elif 'restock' in q:
             cursor.execute("""
-                SELECT COUNT(*) FROM stock 
-                WHERE quantity < reorder_level
+                SELECT COUNT(*) 
+                FROM sales s 
+                JOIN store st ON s.storeid = st.storeid
+                WHERE s.stock < 10  -- Low stock threshold
             """)
             count = cursor.fetchone()[0]
-            response = f"⚠️ **{count} Items Need Restock**\n\nGo to /understock"
-                
+            response = f"⚠️ **{count} Low Stock Items**\n\nCheck /understock"
+
         # NAVIGATION - AFTER ALL QUERIES
         elif 'dashboard' in q:
             response = '<a href="/" style="color:#667eea;font-weight:bold;">🏠 Dashboard</a>'
