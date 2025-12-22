@@ -909,7 +909,7 @@ def admin_users():
     if current_user.role != 'admin':
         flash("❌ Admin only!", "danger")
         return redirect(url_for('dashboard'))
-    
+    dashboard_url = url_for('dashboard')
     conn = get_db_conn_raw()
     cursor = get_cursor(conn)
     cursor.execute("""
@@ -965,7 +965,7 @@ def admin_users():
         <div style='margin-top:25px; text-align:center;'>
             <a href='/admin/login-logs' style='background:linear-gradient(135deg,#198754,#146c43); color:white; padding:12px 24px; text-decoration:none; border-radius:10px; margin-right:15px; font-weight:600; box-shadow:0 4px 15px rgba(25,135,84,0.3);'>📊 Full Login Logs</a>
             <a href='/admin/stores' style='background:linear-gradient(135deg,#0d6efd,#1e88e5); color:white; padding:12px 24px; text-decoration:none; border-radius:10px; margin-right:15px; font-weight:600; box-shadow:0 4px 15px rgba(13,110,253,0.3);'>🏪 Store Managers</a>
-            <a href="{{ url_for('dashboard') }}" style='background:linear-gradient(135deg,#6c757d,#5a6268); color:white; padding:12px 24px; text-decoration:none; border-radius:10px; font-weight:600; box-shadow:0 4px 15px rgba(108,117,125,0.3);'>← Dashboard</a>
+            <a href='{dashboard_url}' style='background:linear-gradient(135deg,#6c757d,#5a6268); color:white; padding:12px 24px; text-decoration:none; border-radius:10px; font-weight:600; box-shadow:0 4px 15px rgba(108,117,125,0.3);'>← Dashboard</a>
         </div>
     </div>
     """
