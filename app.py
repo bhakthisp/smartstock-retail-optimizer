@@ -419,10 +419,20 @@ def live_updater_background():
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (now_ist, cityid, storeid, productid, sale_amount, new_stock, hour, discount, holiday_flag, activity_flag))
             conn.commit()
+            
+            # 🔥 365 DAYS CLEANUP (EXACT indentation):
+            cur.execute("""
+                DELETE FROM sales 
+                WHERE created_at < NOW() - INTERVAL '365 days'
+            """)
+            conn.commit()
+            print(f"🧹 Cleaned sales older than 365 days")
+
             cur.execute(
                 "SELECT stock FROM sales WHERE storeid=%s AND productid=%s ORDER BY dt DESC LIMIT 1",
                 (storeid, productid)
             )
+
             r = cur.fetchone()
             current_stock = r[0] if r else new_stock  # Use DB stock or fallback
             new_stock = max(current_stock - sale_amount, 0)  # Recalculate
