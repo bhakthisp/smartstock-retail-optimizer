@@ -1202,42 +1202,67 @@ def ai_assistant():
     conn = get_db_conn_raw()
     cursor = get_cursor(conn)
     
-    if 'city' in q:
+    # Navigation commands
+    nav_commands = {
+        'dashboard': '🏠 <a href="/" style="color:#0d6efd;font-weight:600;">→ Go to Dashboard</a>',
+        'overstock': '🔴 <a href="/overstock" style="color:#ffc107;font-weight:600;">→ Overstock Alerts</a>',
+        'understock': '⚠️ <a href="/understock" style="color:#dc3545;font-weight:600;">→ Understock Alerts</a>',
+        'cities': '🌆 <a href="/cities" style="color:#0dcaf0;font-weight:600;">→ Cities Page</a>',
+        'stores': '🏪 <a href="/admin/stores" style="color:#198754;font-weight:600;">→ All Stores (Admin)</a>',
+        'users': '👥 <a href="/admin/users" style="color:#6f42c1;font-weight:600;">→ Users Page (Admin)</a>'
+    }
+    
+    if any(cmd in q for cmd in nav_commands):
+        for cmd, link in nav_commands.items():
+            if cmd in q:
+                cursor.close(); conn.close()
+                return jsonify({'response': f"🚀 {link}"})
+    
+    # Live data queries
+    if 'city' in q or 'cities' in q:
         cursor.execute("SELECT COUNT(*) FROM city")
         cities = cursor.fetchone()[0]
-        cursor.execute("SELECT cityname FROM city ORDER BY cityname LIMIT 10")
-        citylist = [r[0] for r in cursor.fetchall()]
-        response = f"🌆 **Total: {cities} cities**\n" + ' • '.join(citylist)
+        cursor.execute("SELECT cityname FROM city ORDER BY cityname")
+        citylist = [f"• {r[0]}" for r in cursor.fetchall()]
+        response = f"🌆 **Total: {cities} cities**\n" + '\n'.join(citylist[:15])
     
     elif 'store' in q or 'stores' in q:
-        cursor.execute("SELECT COUNT(*) FROM store")
-        stores = cursor.fetchone()[0]
-        cursor.execute("SELECT c.cityname, s.storename FROM store s JOIN city c ON s.cityid=c.cityid LIMIT 10")
-        storelist = [f"{r[0]} - {r[1]}" for r in cursor.fetchall()]
-        response = f"🏪 **Total: {stores} stores**\n" + '\n'.join(storelist)
+        if 'mumbai' in q or 'delhi' in q or 'bangalore' in q:
+            cityname = q.split()[-1].title()
+            cursor.execute("SELECT s.storename FROM store s JOIN city c ON s.cityid=c.cityid WHERE c.cityname ILIKE %s", (f'%{cityname}%',))
+            citystores = [f"• {r[0]}" for r in cursor.fetchall()]
+            response = f"🏪 **Stores in {cityname}:**\n" + '\n'.join(citystores) + f"\n\nTotal stores: <a href='/admin/stores'>View all</a>"
+        else:
+            cursor.execute("SELECT COUNT(*) FROM store")
+            stores = cursor.fetchone()[0]
+            cursor.execute("SELECT c.cityname, s.storename FROM store s JOIN city c ON s.cityid=c.cityid ORDER BY c.cityname LIMIT 20")
+            storelist = [f"• {r[0]} - {r[1]}" for r in cursor.fetchall()]
+            response = f"🏪 **Total: {stores} stores**\n" + '\n'.join(storelist)
     
     elif 'product' in q or 'products' in q:
         cursor.execute("SELECT COUNT(*) FROM product")
         products = cursor.fetchone()[0]
-        cursor.execute("SELECT productname FROM product LIMIT 10")
-        prodlist = [r[0] for r in cursor.fetchall()]
-        response = f"📦 **Total: {products} products**\n" + ', '.join(prodlist)
+        cursor.execute("SELECT productname FROM product ORDER BY productname LIMIT 20")
+        prodlist = [f"• {r[0]}" for r in cursor.fetchall()]
+        response = f"📦 **Total: {products} products**\n" + '\n'.join(prodlist)
     
-    elif 'restock' in q or 'understock' in q or 'low' in q:
-        under = len([a for a in all_alerts[-20:] if 'Restock Needed' in a.get('stock_alert', '')])
-        response = f"⚠️ **{under} stores need restock now**\nCheck /understock"
+    elif any(x in q for x in ['restock', 'understock', 'low stock']):
+        under = len([a for a in all_alerts[-50:] if 'Restock Needed' in a.get('stock_alert', '')])
+        low_stores = [a['store'] for a in all_alerts[-20:] if 'Restock Needed' in a.get('stock_alert', '')]
+        response = f"⚠️ **{under} stores need restock**\n" + '\n'.join([f"• {s}" for s in low_stores[:8]]) + f"\n\n<a href='/understock' style='color:#dc3545;font-weight:600;'>→ View All Understock</a>"
     
     elif 'overstock' in q:
-        over = len([a for a in all_alerts[-20:] if 'Overstock' in a.get('stock_alert', '')])
-        response = f"🔴 **{over} overstock alerts**\nCheck /overstock"
+        over = len([a for a in all_alerts[-50:] if 'Overstock' in a.get('stock_alert', '')])
+        response = f"🔴 **{over} overstock alerts**\n<a href='/overstock' style='color:#ffc107;font-weight:600;'>→ View Overstock Page</a>"
     
     else:
-        response = """🤖 **Ask me:**
-• "cities?" → Total + list
-• "stores?" → Total + samples  
-• "products?" → Total count
-• "restock?" → Live understock
-• "overstock?" → Live alerts"""
+        response = """🤖 **SmartStock AI Commands:**
+• "cities" → All cities list
+• "stores in mumbai" → City-specific stores
+• "products" → All products
+• "restock" → Live understock alerts
+• "dashboard" → Go to dashboard
+• "stores" → Go to stores page"""
     
     cursor.close(); conn.close()
     return jsonify({'response': response})
