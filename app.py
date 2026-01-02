@@ -975,7 +975,7 @@ def admin_users():
 @app.route("/")
 @login_required
 def dashboard():
-    fresh_alerts = get_fresh_alerts_from_db(limit=1000)  # NEW FUNCTION
+    fresh_alerts = get_fresh_alerts_from_db(limit=1000) 
     if current_user.role == 'store_manager':
         user_storeid = current_user.storeid
         store_alerts = [a for a in fresh_alerts + all_alerts if a.get('storeid') == user_storeid]
@@ -1006,7 +1006,7 @@ def dashboard():
                          subtitle=subtitle,
                          my_store_link=my_store_link,
                          user=current_user,
-                         CACHE_BUST=f"{int(time.time())}")  # 🔥 Cache buster!
+                         CACHE_BUST=f"{int(time.time())}")  
 @app.route("/overstock")
 @login_required
 def overstock_page():
@@ -1107,52 +1107,67 @@ def product_history_page():
     
     return render_template("product_history.html", user=current_user)
 
-@app.route("/api/history-search")
+@app.route('/history', methods=['GET'])
 @login_required
-def history_search():
+def producthistorypage():
     if current_user.role != 'admin':
-        return jsonify({"error": "Admin only!"}), 403
-    
-    try:
-        date_from = request.args.get("date_from")
-        date_to = request.args.get("date_to", date_from)
-        city = request.args.get("city", "").strip()
-        store = request.args.get("store", "").strip()
-        product = request.args.get("product", "").strip()
-        
-        params = {}
-        sql = """
-        SELECT 
-            s.dt as timestamp,
-            s.id as record_id,
-            s.storeid, st.storename, c.cityname,
-            s.productid, p.productname, 
-            s.stock, s.sale_amount,
-            CASE 
-                WHEN s.stock < 5 THEN '🔴 Low Stock'
-                WHEN s.stock > 40 THEN '🟡 Overstock'
-                ELSE '🟢 OK'
-            END as stock_status
-        FROM sales s
-        JOIN store st ON s.storeid = st.storeid
-        JOIN city c ON st.cityid = c.cityid
-        JOIN product p ON s.productid = p.productid
+        flash('Admin only!', 'danger')
+        return redirect(url_for('dashboard'))
+    city_filter = request.args.get('city', '').strip()
+    store_filter = request.args.get('store', '').strip()
+    return render_template('producthistory.html', 
+                         city_filter=city_filter, 
+                         store_filter=store_filter,
+                         user=current_user)
+
+@app.route('/api/history-search', methods=['GET'])
+@login_required
+def historysearch():
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Admin only!', 'status': 403})
+
+    city = request.args.get('city', '').strip()
+    store = request.args.get('store', '').strip()
+
+    params = {}
+    sql = """
+        SELECT s.dt as timestamp, 
+               s.id as record_id,
+               s.store_id, 
+               st.store_name, 
+               c.city_name, 
+               s.product_id, 
+               p.product_name, 
+               s.stock, 
+               s.sale_amount,
+               CASE 
+                   WHEN s.stock <= 5 THEN 'Low Stock'
+                   WHEN s.stock >= 40 THEN 'Overstock' 
+                   ELSE 'OK'
+               END as stock_status
+        FROM sales s 
+        JOIN store st ON s.store_id = st.store_id 
+        JOIN city c ON st.city_id = c.city_id 
+        JOIN product p ON s.product_id = p.product_id 
         WHERE 1=1
-        """
-        if date_from: sql += " AND DATE(s.dt) >= :date_from"; params["date_from"] = date_from
-        if date_to:   sql += " AND DATE(s.dt) <= :date_to"; params["date_to"] = date_to
-        if city:      sql += " AND c.cityname ILIKE :city"; params["city"] = f"%{city}%"
-        if store:     sql += " AND st.storename ILIKE :store_name"; params["store_name"] = f"%{store}%"
-        if product:   sql += " AND p.productname ILIKE :product"; params["product"] = f"%{product}%"
-        
-        sql += " ORDER BY s.dt DESC LIMIT 100"
+    """
+
+    if city:
+        sql += " AND c.city_name ILIKE %(city)s"
+        params['city'] = f'%{city}%'
+    if store:
+        sql += " AND st.store_name ILIKE %(store)s" 
+        params['store'] = f'%{store}%'
+
+    sql += " ORDER BY s.dt DESC LIMIT 100"
+
+    try:
         df = pd.read_sql(text(sql), engine, params=params)
         return jsonify(df.to_dict('records'))
     except Exception as e:
-        print(f"❌ History search error: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"History search error: {e}")
+        return jsonify({'error': str(e), 'status': 500})
 
-    
 @app.route("/api/cities")
 def api_cities():
     search = request.args.get("search", "").lower()
