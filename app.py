@@ -1116,49 +1116,59 @@ def producthistorypage():
 
 @app.route('/api/history-search', methods=['GET'])
 @login_required
-def historysearch():
+def history_search_api():
     if current_user.role != 'admin':
-        return jsonify({'error': 'Admin only!', 'status': 403})
-
-    city = request.args.get('city', '').strip()
-    store = request.args.get('store', '').strip()
-
+        return jsonify({'error': 'Admin only!'}), 403
+    
+    city_filter = request.args.get('city', '').strip()
+    store_filter = request.args.get('store', '').strip()
+    
+    conn = get_db_conn_raw()
+    cursor = get_cursor(conn)
+    
+    where_conditions = ["1=1"]
     params = {}
-    sql = """
-        SELECT s.dt as timestamp, 
-               s.id as record_id,
-               st.storename as store_name, 
-               c.cityname as city_name, 
-               p.productname as product_name, 
-               s.stock, 
-               s.sale_amount,
-               CASE 
-                   WHEN s.stock <= 5 THEN '🔴 Low Stock'
-                   WHEN s.stock >= 40 THEN '🟡 Overstock' 
-                   ELSE '🟢 OK'
-               END as stock_status
+    
+    # ✅ FIX: Proper % handling for LIKE
+    if city_filter:
+        where_conditions.append("LOWER(c.cityname) LIKE %(city)s")
+        params['city'] = f'%{city_filter}%'  # ← WRAP % OUTSIDE
+    
+    if store_filter:
+        where_conditions.append("LOWER(st.storename) LIKE %(store)s") 
+        params['store'] = f'%{store_filter}%'  # ← WRAP % OUTSIDE
+    
+    query = """
+        SELECT s.dt as timestamp, s.id as record_id, st.storename as store_name, 
+               c.cityname as city_name, p.productname as product_name, 
+               s.stock, s.sale_amount,
+               CASE WHEN s.stock <= 5 THEN '🔴 Low Stock'
+                    WHEN s.stock >= 40 THEN '🟡 Overstock' 
+                    ELSE '🟢 OK' END as stock_status
         FROM sales s 
         JOIN store st ON s.storeid = st.storeid 
         JOIN city c ON st.cityid = c.cityid 
         JOIN product p ON s.productid = p.productid 
-        WHERE 1=1
+        WHERE """ + " AND ".join(where_conditions) + """
+        ORDER BY s.dt DESC LIMIT 10
     """
-
-    if city:
-        sql += " AND LOWER(c.cityname) LIKE %(city)s"
-        params['city'] = f'%{city.lower()}%'
-    if store:
-        sql += " AND LOWER(st.storename) LIKE %(store)s"
-        params['store'] = f'%{store.lower()}%'
-
-    sql += " ORDER BY s.dt DESC LIMIT 10"  # Recent 10 only
-
-    try:
-        df = pd.read_sql(text(sql), engine, params=params)
-        return jsonify(df.to_dict('records'))
-    except Exception as e:
-        print(f"History search error: {e}")
-        return jsonify({'error': str(e), 'status': 500})
+    
+    cursor.execute(query, params)
+    results = cursor.fetchall()
+    
+    # Convert to dicts
+    columns = [desc[0] for desc in cursor.description]
+    data = [dict(zip(columns, row)) for row in results]
+    
+    cursor.close()
+    conn.close()
+    
+    return jsonify({
+        'results': data,
+        'count': len(data),
+        'city_filter': city_filter,
+        'store_filter': store_filter
+    })
 
 
 @app.route("/api/cities")
