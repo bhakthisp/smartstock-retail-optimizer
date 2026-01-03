@@ -1113,17 +1113,6 @@ def producthistorypage():
                          store_filter=store_filter,  # ✅ Matches {{ store_filter }}
                          user=current_user)
 
-@app.route('/history', methods=['GET'])
-@login_required
-def producthistorypage():
-    if current_user.role != 'admin':
-        flash('Admin only!', 'danger')
-        return redirect(url_for('dashboard'))
-    
-    store_filter = request.args.get('store', '').strip()
-    return render_template('producthistory.html', 
-                         store_filter=store_filter,
-                         user=current_user)
 
 @app.route('/api/history-search', methods=['GET'])
 @login_required
