@@ -1098,23 +1098,15 @@ def debug():
         "live_thread_alive": live_thread is not None and live_thread.is_alive() if 'live_thread' in globals() else False,
         "thread_count": threading.active_count()
     })
+
 @app.route('/history', methods=['GET'])
 @login_required
 def history_page():
     if current_user.role != 'admin':
         flash('Admin only!', 'danger')
         return redirect(url_for('dashboard'))
-    
-    city_filter = request.args.get('city', '').strip()
-    store_filter = request.args.get('store', '').strip()
-    
-    # Get filtered results for initial load
-    results = get_history_records(city_filter, store_filter)
-    
-    return render_template('product_history.html', 
-                         results=results,
-                         city_filter=city_filter,
-                         store_filter=store_filter)
+    return render_template('product_history.html')  # EMPTY!
+
 
 def get_history_records(city_filter='', store_filter=''):
     conn = get_db_conn_raw()

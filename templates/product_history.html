@@ -5,25 +5,25 @@
 <div class="row mb-5">
     <div class="col-12">
         <h1 class="display-5 fw-bold mb-1"><i class="fas fa-history text-primary"></i>Product History</h1>
-        <p class="text-muted mb-4">Filter current dashboard alerts by City → Store <strong>(Admin Only)</strong></p>
+        <p class="text-muted mb-4">Filter dashboard alerts by City → Store <strong>(Admin Only)</strong></p>
     </div>
 </div>
 
-<!-- 🔍 SEARCH FORM - BULLETPROOF -->
+<!-- 🔍 SEARCH FORM ONLY -->
 <div class="row mb-4">
     <form id="search-form" class="row g-3 w-100">
         <div class="col-md-4">
             <div class="glass-card p-3">
                 <label class="form-label fw-bold">🏙️ City</label>
                 <input type="text" class="form-control" id="city-filter" name="city" 
-                       placeholder="Pune, Mumbai, Nagpur..." value="{{ city_filter or '' }}">
+                       placeholder="manglore, mumbai, chennai...">
             </div>
         </div>
         <div class="col-md-4">
             <div class="glass-card p-3">
                 <label class="form-label fw-bold">🏪 Store</label>
                 <input type="text" class="form-control" id="store-filter" name="store" 
-                       placeholder="Store 1, Store 10..." value="{{ store_filter or '' }}">
+                       placeholder="Store 10, Store 71...">
             </div>
         </div>
         <div class="col-md-4 d-flex align-items-end">
@@ -34,14 +34,14 @@
     </form>
 </div>
 
-<!-- 📊 DASHBOARD-STYLE RESULTS TABLE -->
+<!-- 📊 EMPTY TABLE UNTIL FILTER -->
 <div class="row">
     <div class="col-12">
         <div class="card glass-card border-0 shadow-lg">
             <div class="card-header bg-transparent border-0 pb-0">
                 <h5 class="mb-0">
-                    <i class="fas fa-list me-2"></i>Filtered Dashboard Records 
-                    <span class="badge bg-primary ms-2" id="record-count">{{ results|length }}</span>
+                    <i class="fas fa-list me-2"></i>Dashboard Records 
+                    <span class="badge bg-secondary ms-2" id="record-count">0</span>
                 </h5>
             </div>
             <div class="card-body p-0">
@@ -59,34 +59,13 @@
                             </tr>
                         </thead>
                         <tbody id="history-table">
-                            {% if results %}
-                                {% for record in results %}
-                                <tr class="{% if record.stock <= 5 %}table-danger{% elif record.stock >= 40 %}table-warning{% else %}table-success{% endif %}">
-                                    <td>{{ record.timestamp or 'N/A' }}</td>
-                                    <td><span class="badge bg-secondary">{{ record.city_name or 'N/A' }}</span></td>
-                                    <td>{{ record.store_name or 'N/A' }}</td>
-                                    <td>{{ record.product_name or 'N/A' }}</td>
-                                    <td><span class="fw-bold text-danger">-{{ record.sale_amount or 0 }}</span></td>
-                                    <td><span class="fw-bold">{{ record.stock or 0 }}</span></td>
-                                    <td>
-                                        <span class="badge fs-6 fw-semibold 
-                                            {% if record.stock <= 5 %}bg-danger{% 
-                                            elif record.stock >= 40 %}bg-warning text-dark{% 
-                                            else %}bg-success{% endif %}">
-                                            {{ record.stock_status or 'OK' }}
-                                        </span>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            {% else %}
-                                <tr>
-                                    <td colspan="7" class="text-center p-5">
-                                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
-                                        <h5 class="text-muted">No sales records yet</h5>
-                                        <p class="text-muted">Dashboard alerts will appear here when available</p>
-                                    </td>
-                                </tr>
-                            {% endif %}
+                            <tr>
+                                <td colspan="7" class="text-center p-5">
+                                    <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                                    <h5 class="text-muted">👆 Type City/Store above → Click 🔍</h5>
+                                    <p class="text-muted mb-0">Examples: "manglore", "Store 10", "chennai"</p>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -95,27 +74,15 @@
     </div>
 </div>
 
-<!-- 🔙 ACTION BUTTONS -->
+<!-- 🔙 BUTTONS -->
 <div class="row mt-4">
     <div class="col-12">
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
             <a href="/" class="btn btn-outline-primary">
                 <i class="fas fa-arrow-left me-2"></i>← Back to Dashboard
             </a>
-            <button type="button" class="btn btn-secondary" onclick="clearFilters()">
-                🧹 Clear Filters
-            </button>
-            <button type="button" class="btn btn-info" onclick="showAllRecords()">
-                📊 Show All Records
-            </button>
         </div>
     </div>
-</div>
-
-<!-- ℹ️ INFO NOTICE -->
-<div class="alert alert-info mt-4 border-0" role="alert">
-    <i class="fas fa-info-circle me-2"></i>
-    <strong>Tip:</strong> Type city/store names from dashboard → Click 🔍 or press Enter → See matching records instantly!
 </div>
 
 {% endblock %}
@@ -128,27 +95,29 @@ document.addEventListener('DOMContentLoaded', function() {
     const tableBody = document.getElementById('history-table');
     const countEl = document.getElementById('record-count');
 
-    // 🔍 MAIN SEARCH FUNCTION
+    // 🔍 SEARCH - ONLY SHOWS AFTER CLICK
     form.addEventListener('submit', function(e) {
         e.preventDefault();
         
         const formData = new FormData(form);
-        const city = formData.get('city') || '';
-        const store = formData.get('store') || '';
+        const city = formData.get('city')?.trim() || '';
+        const store = formData.get('store')?.trim() || '';
         
-        // Loading state
+        // LOADING
         tableBody.innerHTML = `
             <tr><td colspan="7" class="text-center p-4">
                 <i class="fas fa-spinner fa-spin fa-2x text-primary mb-2"></i>
-                <div>🔍 Searching records...</div>
+                <div>🔍 Filtering dashboard records...</div>
             </td></tr>`;
         countEl.textContent = '0';
+        countEl.className = 'badge bg-secondary ms-2';
         
-        // API call
+        // API CALL
         fetch(`/api/history-search?city=${encodeURIComponent(city)}&store=${encodeURIComponent(store)}`)
             .then(response => response.json())
             .then(data => {
                 if (data.results && data.results.length > 0) {
+                    // ✅ SHOW MATCHING RECORDS
                     tableBody.innerHTML = data.results.map(record => `
                         <tr class="${record.stock <= 5 ? 'table-danger' : record.stock >= 40 ? 'table-warning' : 'table-success'}">
                             <td>${record.timestamp || 'N/A'}</td>
@@ -166,26 +135,30 @@ document.addEventListener('DOMContentLoaded', function() {
                             </td>
                         </tr>
                     `).join('');
+                    
+                    countEl.textContent = data.count;
+                    countEl.className = 'badge bg-primary ms-2';
                 } else {
+                    // ❌ NO MATCHES
                     tableBody.innerHTML = `
                         <tr><td colspan="7" class="text-center p-5">
-                            <i class="fas fa-search fa-3x text-muted mb-3"></i>
-                            <h5 class="text-muted">No matching records found</h5>
-                            <p class="text-muted">Try: "Pune", "Store 1", "Mumbai", or clear filters</p>
+                            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No matching dashboard records</h5>
+                            <p class="text-muted">Try exact names: "manglore", "Store 10", "chennai - Store 71"</p>
                         </td></tr>`;
+                    countEl.textContent = '0';
                 }
-                countEl.textContent = data.count || 0;
             })
             .catch(error => {
-                console.error('Search error:', error);
+                console.error('Error:', error);
                 tableBody.innerHTML = `
                     <tr><td colspan="7" class="text-center p-4 text-danger">
-                        <i class="fas fa-exclamation-triangle"></i> Search failed. Try again.
+                        <i class="fas fa-exclamation-triangle me-2"></i>Search failed
                     </td></tr>`;
             });
     });
 
-    // ↵ ENTER KEY SUPPORT
+    // ↵ ENTER KEY
     document.querySelectorAll('#city-filter, #store-filter').forEach(input => {
         input.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
@@ -194,18 +167,5 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
-
-// 🧹 CLEAR FILTERS
-function clearFilters() {
-    document.getElementById('search-form').reset();
-    window.location.href = '/history';
-}
-
-// 📊 SHOW ALL RECORDS
-function showAllRecords() {
-    document.getElementById('city-filter').value = '';
-    document.getElementById('store-filter').value = '';
-    window.location.href = '/history';
-}
 </script>
 {% endblock %}
