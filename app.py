@@ -1100,7 +1100,7 @@ def debug():
     })
 @app.route('/history', methods=['GET'])
 @login_required
-def producthistorypage():
+def history_page():
     if current_user.role != 'admin':
         flash('Admin only!', 'danger')
         return redirect(url_for('dashboard'))
@@ -1108,11 +1108,50 @@ def producthistorypage():
     city_filter = request.args.get('city', '').strip()
     store_filter = request.args.get('store', '').strip()
     
-    return render_template('product_history.html',  # ✅ Correct filename
-                         city_filter=city_filter,    # ✅ Matches {{ city_filter }}
-                         store_filter=store_filter,  # ✅ Matches {{ store_filter }}
-                         user=current_user)
+    # Get filtered results for initial load
+    results = get_history_records(city_filter, store_filter)
+    
+    return render_template('product_history.html', 
+                         results=results,
+                         city_filter=city_filter,
+                         store_filter=store_filter)
 
+def get_history_records(city_filter='', store_filter=''):
+    conn = get_db_conn_raw()
+    cursor = get_cursor(conn)
+    
+    where_conditions = ["1=1"]
+    params = {}
+    
+    if city_filter:
+        where_conditions.append("LOWER(c.cityname) LIKE %(city)s")
+        params['city'] = f'%{city_filter}%'
+    
+    if store_filter:
+        where_conditions.append("LOWER(st.storename) LIKE %(store)s")
+        params['store'] = f'%{store_filter}%'
+    
+    query = """
+        SELECT s.dt as timestamp, s.id as record_id, st.storename as store_name, 
+               c.cityname as city_name, p.productname as product_name, 
+               s.stock, s.sale_amount,
+               CASE WHEN s.stock <= 5 THEN '🔴 Low Stock'
+                    WHEN s.stock >= 40 THEN '🟡 Overstock' 
+                    ELSE '🟢 OK' END as stock_status
+        FROM sales s JOIN store st ON s.storeid = st.storeid 
+                     JOIN city c ON st.cityid = c.cityid 
+                     JOIN product p ON s.productid = p.productid 
+        WHERE """ + " AND ".join(where_conditions) + """
+        ORDER BY s.dt DESC LIMIT 10
+    """
+    
+    cursor.execute(query, params)
+    columns = [desc[0] for desc in cursor.description]
+    results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    
+    cursor.close()
+    conn.close()
+    return results
 
 @app.route('/api/history-search', methods=['GET'])
 @login_required
@@ -1123,53 +1162,14 @@ def history_search_api():
     city_filter = request.args.get('city', '').strip()
     store_filter = request.args.get('store', '').strip()
     
-    conn = get_db_conn_raw()
-    cursor = get_cursor(conn)
-    
-    where_conditions = ["1=1"]
-    params = {}
-    
-    # ✅ FIX: Proper % handling for LIKE
-    if city_filter:
-        where_conditions.append("LOWER(c.cityname) LIKE %(city)s")
-        params['city'] = f'%{city_filter}%'  # ← WRAP % OUTSIDE
-    
-    if store_filter:
-        where_conditions.append("LOWER(st.storename) LIKE %(store)s") 
-        params['store'] = f'%{store_filter}%'  # ← WRAP % OUTSIDE
-    
-    query = """
-        SELECT s.dt as timestamp, s.id as record_id, st.storename as store_name, 
-               c.cityname as city_name, p.productname as product_name, 
-               s.stock, s.sale_amount,
-               CASE WHEN s.stock <= 5 THEN '🔴 Low Stock'
-                    WHEN s.stock >= 40 THEN '🟡 Overstock' 
-                    ELSE '🟢 OK' END as stock_status
-        FROM sales s 
-        JOIN store st ON s.storeid = st.storeid 
-        JOIN city c ON st.cityid = c.cityid 
-        JOIN product p ON s.productid = p.productid 
-        WHERE """ + " AND ".join(where_conditions) + """
-        ORDER BY s.dt DESC LIMIT 10
-    """
-    
-    cursor.execute(query, params)
-    results = cursor.fetchall()
-    
-    # Convert to dicts
-    columns = [desc[0] for desc in cursor.description]
-    data = [dict(zip(columns, row)) for row in results]
-    
-    cursor.close()
-    conn.close()
+    results = get_history_records(city_filter, store_filter)
     
     return jsonify({
-        'results': data,
-        'count': len(data),
+        'results': results,
+        'count': len(results),
         'city_filter': city_filter,
         'store_filter': store_filter
     })
-
 
 @app.route("/api/cities")
 def api_cities():

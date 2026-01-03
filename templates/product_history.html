@@ -1,136 +1,154 @@
 {% extends "base.html" %}
-{% block title %}History Search - SmartStock{% endblock %}
+{% block title %}Product History - SmartStock{% endblock %}
 {% block content %}
+
 <div class="row mb-5">
     <div class="col-12">
-        <h1 class="display-5 fw-bold mb-1"><i class="fas fa-history text-warning"></i> Product History</h1>
-        <p class="text-muted mb-4">🔍 Search by City → Store (Admin Only)</p>
+        <h1 class="display-5 fw-bold mb-1"><i class="fas fa-history text-primary"></i>Product History</h1>
+        <p class="text-muted mb-4">Filter current dashboard alerts by City → Store <strong>(Admin Only)</strong></p>
     </div>
 </div>
 
-<!-- 🔥 CITY + STORE ONLY SEARCH FORM -->
-<div class="row mb-5">
-    <div class="col-md-10 mx-auto">
-        <div class="card glass-card shadow-lg">
-            <div class="card-body p-4">
-                <form id="historySearchForm">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">🏙️ City</label>
-                            <input type="text" class="form-control glass-input" name="city" value="{{ city_filter or '' }}" placeholder="e.g. Mumbai">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">🏪 Store</label>
-                            <input type="text" class="form-control glass-input" name="store" value="{{ store_filter or '' }}" placeholder="e.g. Demo Store">
-                        </div>
-                        <div class="col-md-4 d-flex align-items-end">
-                            <button type="submit" class="btn glass-btn btn-lg w-100" id="search_btn">
-                                🔍 SEARCH
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            </div>
+<!-- SAME DASHBOARD FILTERS -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="glass-card p-3">
+            <label class="form-label fw-bold">🏙️ City</label>
+            <input type="text" class="form-control" id="city-filter" placeholder="Pune, Nagpur..." value="{{ city_filter or '' }}">
         </div>
     </div>
+    <div class="col-md-4">
+        <div class="glass-card p-3">
+            <label class="form-label fw-bold">🏪 Store</label>
+            <input type="text" class="form-control" id="store-filter" placeholder="Store 1, Store 2..." value="{{ store_filter or '' }}">
+        </div>
+    </div>
+    <div class="col-md-4 d-flex align-items-end">
+        <button class="btn btn-primary w-100" onclick="searchHistory()">
+            <i class="fas fa-search me-2"></i>🔍 Filter Records
+        </button>
+    </div>
 </div>
 
-<!-- RESULTS -->
+<!-- SAME DASHBOARD TABLE -->
 <div class="row">
     <div class="col-12">
-        <div class="card glass-card shadow-lg">
-            <div class="card-header bg-warning text-dark">
-                <h5>📊 Historical Records (<span id="resultsCount">0</span>)</h5>
+        <div class="card glass-card border-0 shadow-lg">
+            <div class="card-header bg-transparent border-0 pb-0">
+                <h5 class="mb-0"><i class="fas fa-list me-2"></i>Filtered Dashboard Records 
+                    <span class="badge bg-primary ms-2" id="record-count">{{ results|length }}</span>
+                </h5>
             </div>
             <div class="card-body p-0">
-                <div id="resultsTable" class="table-responsive">
-                    <div class="p-5 text-center text-muted">
-                        <i class="fas fa-search fa-3x mb-3 opacity-50"></i>
-                        <h5>Enter City/Store and click SEARCH</h5>
-                    </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Time</th>
+                                <th>City</th>
+                                <th>Store</th>
+                                <th>Product</th>
+                                <th>Sale</th>
+                                <th>Stock</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table">
+                            {% if results %}
+                                {% for record in results %}
+                                <tr class="{% if record.stock <= 5 %}table-danger{% elif record.stock >= 40 %}table-warning{% else %}table-success{% endif %}">
+                                    <td>{{ record.timestamp or 'N/A' }}</td>
+                                    <td><span class="badge bg-secondary">{{ record.city_name or 'N/A' }}</span></td>
+                                    <td>{{ record.store_name or 'N/A' }}</td>
+                                    <td>{{ record.product_name or 'N/A' }}</td>
+                                    <td><span class="fw-bold text-danger">-{{ record.sale_amount or 0 }}</span></td>
+                                    <td><span class="fw-bold">{{ record.stock or 0 }}</span></td>
+                                    <td>
+                                        <span class="badge fs-6 fw-semibold 
+                                            {% if record.stock <= 5 %}bg-danger{% 
+                                            elif record.stock >= 40 %}bg-warning text-dark{% 
+                                            else %}bg-success{% endif %}">
+                                            {{ record.stock_status or 'OK' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr><td colspan="7" class="text-center p-4">
+                                    <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                                    <h5 class="text-muted">No matching records</h5>
+                                    <p class="text-muted">Try different city/store or clear filters</p>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
+<div class="row mt-4">
+    <div class="col-12">
+        <a href="/" class="btn btn-outline-primary">
+            <i class="fas fa-arrow-left me-2"></i>← Back to Dashboard
+        </a>
+        <button class="btn btn-secondary" onclick="clearFilters()">🧹 Clear Filters</button>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
 <script>
-document.getElementById('historySearchForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
+function searchHistory() {
+    const city = document.getElementById('city-filter').value.trim();
+    const store = document.getElementById('store-filter').value.trim();
     
-    const formData = new FormData(this);
-    const params = new URLSearchParams();
-    for (let [key, value] of formData.entries()) {
-        if (value.trim()) params.append(key, value.trim());
-    }
+    // Show loading
+    document.getElementById('history-table').innerHTML = 
+        '<tr><td colspan="7" class="text-center p-4"><i class="fas fa-spinner fa-spin"></i> Searching...</td></tr>';
     
-    try {
-        document.getElementById('search_btn').innerHTML = '⏳ Searching...';
-        
-        const response = await fetch(`/api/history-search?${params}`);
-        const data = await response.json();
-        
-        document.getElementById('resultsCount').textContent = data.length || 0;
-        
-        if (data.error) {
-            document.getElementById('resultsTable').innerHTML = 
-                `<div class="alert alert-danger p-5 m-0"><h5>❌ ${data.error}</h5></div>`;
-            return;
-        }
-        
-        if (!data.length) {
-            document.getElementById('resultsTable').innerHTML = 
-                `<div class="p-5 text-center text-muted m-0"><h5>📭 No records found for this City/Store</h5></div>`;
-            return;
-        }
-        
-        let html = `
-            <table class="table table-hover mb-0">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Date</th>
-                        <th>City</th>
-                        <th>Store</th>
-                        <th>Product</th>
-                        <th>Stock</th>
-                        <th>Sales</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-        
-        data.forEach(row => {
-            const statusClass = row.stock_status?.includes('Low') ? 'text-danger' : 
-                               row.stock_status?.includes('Overstock') ? 'text-warning' : 'text-success';
-            html += `
-                <tr>
-                    <td>${row.timestamp ? new Date(row.timestamp).toLocaleDateString() : 'N/A'}</td>
-                    <td><span class="badge bg-info">${row.city_name || row.cityname || 'N/A'}</span></td>
-                    <td>${row.store_name || row.storename || 'N/A'}</td>
-                    <td>${row.product_name || row.productname || 'N/A'}</td>
-                    <td><strong class="${statusClass}">${row.stock || 0}</strong></td>
-                    <td>${row.sale_amount || row.saleamount || 0}</td>
-                    <td>
-                        <span class="badge ${
-                            statusClass === 'text-danger' ? 'bg-danger' : 
-                            statusClass === 'text-warning' ? 'bg-warning text-dark' : 'bg-success'
-                        }">
-                            ${row.stock_status || 'OK'}
-                        </span>
-                    </td>
-                </tr>`;
+    fetch(`/api/history-search?city=${encodeURIComponent(city)}&store=${encodeURIComponent(store)}`)
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('history-table');
+            const countEl = document.getElementById('record-count');
+            
+            if (data.results.length === 0) {
+                tbody.innerHTML = `
+                    <tr><td colspan="7" class="text-center p-4">
+                        <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No matching records</h5>
+                        <p class="text-muted">Try different city/store</p>
+                    </td></tr>`;
+            } else {
+                tbody.innerHTML = data.results.map(record => `
+                    <tr class="${record.stock <= 5 ? 'table-danger' : record.stock >= 40 ? 'table-warning' : 'table-success'}">
+                        <td>${record.timestamp || 'N/A'}</td>
+                        <td><span class="badge bg-secondary">${record.city_name || 'N/A'}</span></td>
+                        <td>${record.store_name || 'N/A'}</td>
+                        <td>${record.product_name || 'N/A'}</td>
+                        <td><span class="fw-bold text-danger">-${record.sale_amount || 0}</span></td>
+                        <td><span class="fw-bold">${record.stock || 0}</span></td>
+                        <td>
+                            <span class="badge fs-6 fw-semibold 
+                                ${record.stock_status.includes('Low') ? 'bg-danger' : 
+                                  record.stock_status.includes('Overstock') ? 'bg-warning text-dark' : 'bg-success'}">
+                                ${record.stock_status || 'OK'}
+                            </span>
+                        </td>
+                    </tr>`).join('');
+            }
+            
+            countEl.textContent = data.count;
         });
-        html += '</tbody></table>';
-        document.getElementById('resultsTable').innerHTML = html;
-        document.getElementById('search_btn').innerHTML = '✅ REFRESH';
-        
-    } catch(e) {
-        console.error('Search failed:', e);
-        document.getElementById('resultsTable').innerHTML = 
-            `<div class="alert alert-danger p-5 m-0"><h5>❌ Search failed: ${e.message}</h5></div>`;
-        document.getElementById('search_btn').innerHTML = '🔍 SEARCH';
-    }
-});
+}
+
+function clearFilters() {
+    document.getElementById('city-filter').value = '';
+    document.getElementById('store-filter').value = '';
+    window.location.href = '/history';
+}
 </script>
 {% endblock %}
