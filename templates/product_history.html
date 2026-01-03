@@ -9,33 +9,38 @@
     </div>
 </div>
 
-<!-- SAME DASHBOARD FILTERS -->
+<!-- 🔍 SEARCH FORM - BULLETPROOF -->
 <div class="row mb-4">
-    <div class="col-md-4">
-        <div class="glass-card p-3">
-            <label class="form-label fw-bold">🏙️ City</label>
-            <input type="text" class="form-control" id="city-filter" placeholder="Pune, Nagpur..." value="{{ city_filter or '' }}">
+    <form id="search-form" class="row g-3 w-100">
+        <div class="col-md-4">
+            <div class="glass-card p-3">
+                <label class="form-label fw-bold">🏙️ City</label>
+                <input type="text" class="form-control" id="city-filter" name="city" 
+                       placeholder="Pune, Mumbai, Nagpur..." value="{{ city_filter or '' }}">
+            </div>
         </div>
-    </div>
-    <div class="col-md-4">
-        <div class="glass-card p-3">
-            <label class="form-label fw-bold">🏪 Store</label>
-            <input type="text" class="form-control" id="store-filter" placeholder="Store 1, Store 2..." value="{{ store_filter or '' }}">
+        <div class="col-md-4">
+            <div class="glass-card p-3">
+                <label class="form-label fw-bold">🏪 Store</label>
+                <input type="text" class="form-control" id="store-filter" name="store" 
+                       placeholder="Store 1, Store 10..." value="{{ store_filter or '' }}">
+            </div>
         </div>
-    </div>
-    <div class="col-md-4 d-flex align-items-end">
-        <button class="btn btn-primary w-100" onclick="searchHistory()">
-            <i class="fas fa-search me-2"></i>🔍 Filter Records
-        </button>
-    </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100 h-100">
+                <i class="fas fa-search me-2"></i>🔍 Filter Records
+            </button>
+        </div>
+    </form>
 </div>
 
-<!-- SAME DASHBOARD TABLE -->
+<!-- 📊 DASHBOARD-STYLE RESULTS TABLE -->
 <div class="row">
     <div class="col-12">
         <div class="card glass-card border-0 shadow-lg">
             <div class="card-header bg-transparent border-0 pb-0">
-                <h5 class="mb-0"><i class="fas fa-list me-2"></i>Filtered Dashboard Records 
+                <h5 class="mb-0">
+                    <i class="fas fa-list me-2"></i>Filtered Dashboard Records 
                     <span class="badge bg-primary ms-2" id="record-count">{{ results|length }}</span>
                 </h5>
             </div>
@@ -74,10 +79,12 @@
                                 </tr>
                                 {% endfor %}
                             {% else %}
-                                <tr><td colspan="7" class="text-center p-4">
-                                    <i class="fas fa-search fa-3x text-muted mb-3"></i>
-                                    <h5 class="text-muted">No matching records</h5>
-                                    <p class="text-muted">Try different city/store or clear filters</p>
+                                <tr>
+                                    <td colspan="7" class="text-center p-5">
+                                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                                        <h5 class="text-muted">No sales records yet</h5>
+                                        <p class="text-muted">Dashboard alerts will appear here when available</p>
+                                    </td>
                                 </tr>
                             {% endif %}
                         </tbody>
@@ -88,64 +95,114 @@
     </div>
 </div>
 
+<!-- 🔙 ACTION BUTTONS -->
 <div class="row mt-4">
     <div class="col-12">
-        <a href="/" class="btn btn-outline-primary">
-            <i class="fas fa-arrow-left me-2"></i>← Back to Dashboard
-        </a>
-        <button class="btn btn-secondary" onclick="clearFilters()">🧹 Clear Filters</button>
+        <div class="d-flex gap-2">
+            <a href="/" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left me-2"></i>← Back to Dashboard
+            </a>
+            <button type="button" class="btn btn-secondary" onclick="clearFilters()">
+                🧹 Clear Filters
+            </button>
+            <button type="button" class="btn btn-info" onclick="showAllRecords()">
+                📊 Show All Records
+            </button>
+        </div>
     </div>
+</div>
+
+<!-- ℹ️ INFO NOTICE -->
+<div class="alert alert-info mt-4 border-0" role="alert">
+    <i class="fas fa-info-circle me-2"></i>
+    <strong>Tip:</strong> Type city/store names from dashboard → Click 🔍 or press Enter → See matching records instantly!
 </div>
 
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-function searchHistory() {
-    const city = document.getElementById('city-filter').value.trim();
-    const store = document.getElementById('store-filter').value.trim();
-    
-    // Show loading
-    document.getElementById('history-table').innerHTML = 
-        '<tr><td colspan="7" class="text-center p-4"><i class="fas fa-spinner fa-spin"></i> Searching...</td></tr>';
-    
-    fetch(`/api/history-search?city=${encodeURIComponent(city)}&store=${encodeURIComponent(store)}`)
-        .then(r => r.json())
-        .then(data => {
-            const tbody = document.getElementById('history-table');
-            const countEl = document.getElementById('record-count');
-            
-            if (data.results.length === 0) {
-                tbody.innerHTML = `
-                    <tr><td colspan="7" class="text-center p-4">
-                        <i class="fas fa-search fa-3x text-muted mb-3"></i>
-                        <h5 class="text-muted">No matching records</h5>
-                        <p class="text-muted">Try different city/store</p>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('search-form');
+    const tableBody = document.getElementById('history-table');
+    const countEl = document.getElementById('record-count');
+
+    // 🔍 MAIN SEARCH FUNCTION
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(form);
+        const city = formData.get('city') || '';
+        const store = formData.get('store') || '';
+        
+        // Loading state
+        tableBody.innerHTML = `
+            <tr><td colspan="7" class="text-center p-4">
+                <i class="fas fa-spinner fa-spin fa-2x text-primary mb-2"></i>
+                <div>🔍 Searching records...</div>
+            </td></tr>`;
+        countEl.textContent = '0';
+        
+        // API call
+        fetch(`/api/history-search?city=${encodeURIComponent(city)}&store=${encodeURIComponent(store)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.results && data.results.length > 0) {
+                    tableBody.innerHTML = data.results.map(record => `
+                        <tr class="${record.stock <= 5 ? 'table-danger' : record.stock >= 40 ? 'table-warning' : 'table-success'}">
+                            <td>${record.timestamp || 'N/A'}</td>
+                            <td><span class="badge bg-secondary">${record.city_name || 'N/A'}</span></td>
+                            <td>${record.store_name || 'N/A'}</td>
+                            <td>${record.product_name || 'N/A'}</td>
+                            <td><span class="fw-bold text-danger">-${record.sale_amount || 0}</span></td>
+                            <td><span class="fw-bold">${record.stock || 0}</span></td>
+                            <td>
+                                <span class="badge fs-6 fw-semibold 
+                                    ${record.stock_status?.includes('Low') ? 'bg-danger' : 
+                                      record.stock_status?.includes('Overstock') ? 'bg-warning text-dark' : 'bg-success'}">
+                                    ${record.stock_status || 'OK'}
+                                </span>
+                            </td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tableBody.innerHTML = `
+                        <tr><td colspan="7" class="text-center p-5">
+                            <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No matching records found</h5>
+                            <p class="text-muted">Try: "Pune", "Store 1", "Mumbai", or clear filters</p>
+                        </td></tr>`;
+                }
+                countEl.textContent = data.count || 0;
+            })
+            .catch(error => {
+                console.error('Search error:', error);
+                tableBody.innerHTML = `
+                    <tr><td colspan="7" class="text-center p-4 text-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Search failed. Try again.
                     </td></tr>`;
-            } else {
-                tbody.innerHTML = data.results.map(record => `
-                    <tr class="${record.stock <= 5 ? 'table-danger' : record.stock >= 40 ? 'table-warning' : 'table-success'}">
-                        <td>${record.timestamp || 'N/A'}</td>
-                        <td><span class="badge bg-secondary">${record.city_name || 'N/A'}</span></td>
-                        <td>${record.store_name || 'N/A'}</td>
-                        <td>${record.product_name || 'N/A'}</td>
-                        <td><span class="fw-bold text-danger">-${record.sale_amount || 0}</span></td>
-                        <td><span class="fw-bold">${record.stock || 0}</span></td>
-                        <td>
-                            <span class="badge fs-6 fw-semibold 
-                                ${record.stock_status.includes('Low') ? 'bg-danger' : 
-                                  record.stock_status.includes('Overstock') ? 'bg-warning text-dark' : 'bg-success'}">
-                                ${record.stock_status || 'OK'}
-                            </span>
-                        </td>
-                    </tr>`).join('');
+            });
+    });
+
+    // ↵ ENTER KEY SUPPORT
+    document.querySelectorAll('#city-filter, #store-filter').forEach(input => {
+        input.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                form.dispatchEvent(new Event('submit', { bubbles: true }));
             }
-            
-            countEl.textContent = data.count;
         });
+    });
+});
+
+// 🧹 CLEAR FILTERS
+function clearFilters() {
+    document.getElementById('search-form').reset();
+    window.location.href = '/history';
 }
 
-function clearFilters() {
+// 📊 SHOW ALL RECORDS
+function showAllRecords() {
     document.getElementById('city-filter').value = '';
     document.getElementById('store-filter').value = '';
     window.location.href = '/history';
