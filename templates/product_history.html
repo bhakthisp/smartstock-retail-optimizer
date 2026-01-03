@@ -4,43 +4,41 @@
 
 <div class="row mb-5">
     <div class="col-12">
-        <h1 class="display-5 fw-bold mb-1"><i class="fas fa-history text-primary"></i>Product History</h1>
+        <h1 class="display-5 fw-bold mb-1"><i class="fas fa-history text-primary"></i> Product History</h1>
         <p class="text-muted mb-4">Filter dashboard alerts by City → Store <strong>(Admin Only)</strong></p>
     </div>
 </div>
 
-<!-- 🔍 NO FORM - DIRECT INPUTS + BUTTON -->
+<!-- 🔍 ULTRA-SIMPLE - NO GLASS, NO FORM -->
 <div class="row mb-4">
     <div class="col-md-4">
-        <div class="glass-card p-3">
-            <label class="form-label fw-bold">🏙️ City</label>
-            <input type="text" class="form-control" id="city-input" 
-                   placeholder="manglore, mumbai, chennai...">
+        <div class="input-group">
+            <span class="input-group-text">🏙️</span>
+            <input type="text" class="form-control" id="city-input" placeholder="manglore, mumbai...">
         </div>
     </div>
     <div class="col-md-4">
-        <div class="glass-card p-3">
-            <label class="form-label fw-bold">🏪 Store</label>
-            <input type="text" class="form-control" id="store-input" 
-                   placeholder="Store 10, Store 71...">
+        <div class="input-group">
+            <span class="input-group-text">🏪</span>
+            <input type="text" class="form-control" id="store-input" placeholder="Store 10...">
         </div>
     </div>
-    <div class="col-md-4 d-flex align-items-end">
-        <button id="search-btn" class="btn btn-primary w-100 h-100 search-btn-fix">
-            <i class="fas fa-search me-2" id="search-icon"></i>
-            <span id="search-text">🔍 Filter Records</span>
+    <div class="col-md-4">
+        <!-- 🔥 PURE BUTTON - NO CLASSES BLOCKING -->
+        <button id="search-btn" style="width:100%; height:58px; font-size:16px; font-weight:bold; background:#0d6efd; color:white; border:none; border-radius:8px; cursor:pointer;">
+            🔍 SEARCH RECORDS
         </button>
     </div>
 </div>
 
-<!-- 📊 EMPTY UNTIL SEARCH -->
+<!-- TABLE -->
 <div class="row">
     <div class="col-12">
-        <div class="card glass-card border-0 shadow-lg">
-            <div class="card-header bg-transparent border-0 pb-0">
+        <div class="card border-0 shadow">
+            <div class="card-header bg-primary text-white">
                 <h5 class="mb-0">
                     <i class="fas fa-list me-2"></i>Dashboard Records 
-                    <span class="badge bg-secondary ms-2" id="record-count">0</span>
+                    <span id="record-count" style="background:#6c757d; color:white;">0</span>
                 </h5>
             </div>
             <div class="card-body p-0">
@@ -48,21 +46,15 @@
                     <table class="table table-hover mb-0">
                         <thead class="table-dark">
                             <tr>
-                                <th>Time</th>
-                                <th>City</th>
-                                <th>Store</th>
-                                <th>Product</th>
-                                <th>Sale</th>
-                                <th>Stock</th>
-                                <th>Status</th>
+                                <th>Time</th><th>City</th><th>Store</th><th>Product</th><th>Sale</th><th>Stock</th><th>Status</th>
                             </tr>
                         </thead>
                         <tbody id="history-table">
                             <tr>
-                                <td colspan="7" class="text-center p-5">
+                                <td colspan="7" class="text-center p-5 bg-light">
                                     <i class="fas fa-search fa-3x text-muted mb-3"></i>
-                                    <h5 class="text-muted">👆 Type City/Store → Click 🔍</h5>
-                                    <p class="text-muted mb-0">Examples: "manglore", "Store 10", "chennai - Store 71"</p>
+                                    <h5>Type City/Store → Click 🔍</h5>
+                                    <p class="mb-0">Examples: "manglore", "Store 10", "chennai"</p>
                                 </td>
                             </tr>
                         </tbody>
@@ -73,123 +65,82 @@
     </div>
 </div>
 
-<!-- 🔙 BACK BUTTON -->
-<div class="row mt-4">
-    <div class="col-12">
-        <a href="/" class="btn btn-outline-primary">
-            <i class="fas fa-arrow-left me-2"></i>← Back to Dashboard
-        </a>
-    </div>
-</div>
+<a href="/" class="btn btn-outline-primary mt-3 d-block">← Back to Dashboard</a>
 
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// 🔥 ULTRA-BULLETPROOF SEARCH - Works 100%
+// 🔥 SMALLEST WORKING VERSION
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 History page loaded');
-    
     const cityInput = document.getElementById('city-input');
     const storeInput = document.getElementById('store-input');
     const searchBtn = document.getElementById('search-btn');
-    const searchIcon = document.getElementById('search-icon');
-    const searchText = document.getElementById('search-text');
     const tableBody = document.getElementById('history-table');
     const countEl = document.getElementById('record-count');
-
-    // 🔍 BUTTON CLICK - MULTIPLE BINDINGS
-    function doSearch() {
+    
+    function search() {
         const city = cityInput.value.trim();
         const store = storeInput.value.trim();
         
-        console.log('🔍 CLICKED - City:', city, 'Store:', store);
-        
         // LOADING
-        searchIcon.className = 'fas fa-spinner fa-spin me-2';
-        searchText.textContent = 'Searching...';
-        searchBtn.disabled = true;
-        tableBody.innerHTML = `
-            <tr><td colspan="7" class="text-center p-4">
-                <i class="fas fa-spinner fa-spin fa-2x text-primary mb-2"></i>
-                <div>🔍 Filtering dashboard records...</div>
-            </td></tr>`;
-        countEl.textContent = '0';
+        searchBtn.innerHTML = '⏳ SEARCHING...';
+        searchBtn.style.background = '#ffc107';
+        tableBody.innerHTML = '<tr><td colspan="7" class="text-center p-4"><i class="fas fa-spinner fa-spin fa-2x"></i> Loading...</td></tr>';
         
-        // API
-        const url = `/api/history-search?city=${encodeURIComponent(city)}&store=${encodeURIComponent(store)}`;
-        console.log('📡 API URL:', url);
-        
-        fetch(url)
-            .then(response => {
-                console.log('📡 Response status:', response.status);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                return response.json();
-            })
+        fetch(`/api/history-search?city=${encodeURIComponent(city)}&store=${encodeURIComponent(store)}`)
+            .then(r => r.json())
             .then(data => {
-                console.log('✅ API data:', data);
-                
-                if (data.results && data.results.length > 0) {
-                    tableBody.innerHTML = data.results.map(record => `
-                        <tr class="${record.stock <= 5 ? 'table-danger' : record.stock >= 40 ? 'table-warning' : 'table-success'}">
-                            <td>${record.timestamp || 'N/A'}</td>
-                            <td><span class="badge bg-secondary">${record.city_name || 'N/A'}</span></td>
-                            <td>${record.store_name || 'N/A'}</td>
-                            <td>${record.product_name || 'N/A'}</td>
-                            <td><span class="fw-bold text-danger">-${record.sale_amount || 0}</span></td>
-                            <td><span class="fw-bold">${record.stock || 0}</span></td>
-                            <td>
-                                <span class="badge fs-6 fw-semibold 
-                                    ${record.stock_status?.includes('Low') ? 'bg-danger' : 
-                                      record.stock_status?.includes('Overstock') ? 'bg-warning text-dark' : 'bg-success'}">
-                                    ${record.stock_status || 'OK'}
-                                </span>
-                            </td>
-                        </tr>
-                    `).join('');
+                if (data.results.length > 0) {
+                    let html = '';
+                    data.results.forEach(record => {
+                        const rowClass = record.stock <= 5 ? 'table-danger' : record.stock >= 40 ? 'table-warning' : 'table-success';
+                        html += `
+                            <tr class="${rowClass}">
+                                <td>${record.timestamp || 'N/A'}</td>
+                                <td><span class="badge bg-secondary">${record.city_name}</span></td>
+                                <td>${record.store_name}</td>
+                                <td>${record.product_name}</td>
+                                <td class="fw-bold text-danger">-${record.sale_amount}</td>
+                                <td class="fw-bold">${record.stock}</td>
+                                <td>
+                                    <span class="badge ${record.stock_status.includes('Low') ? 'bg-danger' : record.stock_status.includes('Overstock') ? 'bg-warning text-dark' : 'bg-success'}">
+                                        ${record.stock_status}
+                                    </span>
+                                </td>
+                            </tr>`;
+                    });
+                    tableBody.innerHTML = html;
                     countEl.textContent = data.count;
-                    countEl.className = 'badge bg-primary ms-2';
+                    countEl.style.background = '#0d6efd';
+                    countEl.style.color = 'white';
                 } else {
                     tableBody.innerHTML = `
-                        <tr><td colspan="7" class="text-center p-5">
+                        <tr><td colspan="7" class="text-center p-5 bg-light">
                             <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
-                            <h5 class="text-muted">No matching dashboard records</h5>
-                            <p class="text-muted">Try exact names from dashboard</p>
+                            <h5>No matching records</h5>
+                            <p>Try exact dashboard names</p>
                         </td></tr>`;
                     countEl.textContent = '0';
                 }
             })
-            .catch(error => {
-                console.error('❌ ERROR:', error);
-                tableBody.innerHTML = `
-                    <tr><td colspan="7" class="text-center p-4 text-danger">
-                        <i class="fas fa-exclamation-triangle me-2"></i>Error: ${error.message}
-                    </td></tr>`;
+            .catch(e => {
+                tableBody.innerHTML = '<tr><td colspan="7" class="text-center p-4 text-danger">Error loading data</td></tr>';
             })
             .finally(() => {
-                // RESET BUTTON
-                searchIcon.className = 'fas fa-search me-2';
-                searchText.textContent = '🔍 Filter Records';
-                searchBtn.disabled = false;
+                searchBtn.innerHTML = '🔍 SEARCH RECORDS';
+                searchBtn.style.background = '#0d6efd';
             });
     }
-
-    // 🔥 4 WAYS TO TRIGGER SEARCH
-    searchBtn.addEventListener('click', doSearch);
-    searchBtn.addEventListener('touchstart', doSearch);  // Mobile
-    document.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && 
-            (document.activeElement === cityInput || document.activeElement === storeInput)) {
-            doSearch();
-        }
-    });
-
-    // DEBUG: Test button works
-    console.log('✅ Button ready:', searchBtn);
-    searchBtn.style.cursor = 'pointer';
-    searchBtn.style.position = 'relative';
-    searchBtn.style.zIndex = '9999';
+    
+    // 🔥 DIRECT CLICK - NO CONFLICTS
+    searchBtn.onclick = search;
+    searchBtn.addEventListener('click', search);
+    
+    // ENTER KEY
+    cityInput.onkeypress = storeInput.onkeypress = function(e) {
+        if (e.keyCode == 13) search();
+    };
 });
 </script>
 {% endblock %}
