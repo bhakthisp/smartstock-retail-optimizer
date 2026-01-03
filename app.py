@@ -1098,14 +1098,20 @@ def debug():
         "live_thread_alive": live_thread is not None and live_thread.is_alive() if 'live_thread' in globals() else False,
         "thread_count": threading.active_count()
     })
-@app.route("/history")
+@app.route('/history', methods=['GET'])
 @login_required
-def product_history_page():
+def producthistorypage():
     if current_user.role != 'admin':
-        flash("❌ Admin only!", "danger")
+        flash('Admin only!', 'danger')
         return redirect(url_for('dashboard'))
     
-    return render_template("product_history.html", user=current_user)
+    city_filter = request.args.get('city', '').strip()
+    store_filter = request.args.get('store', '').strip()
+    
+    return render_template('product_history.html',  # ✅ Correct filename
+                         city_filter=city_filter,    # ✅ Matches {{ city_filter }}
+                         store_filter=store_filter,  # ✅ Matches {{ store_filter }}
+                         user=current_user)
 
 @app.route('/history', methods=['GET'])
 @login_required
@@ -1113,10 +1119,9 @@ def producthistorypage():
     if current_user.role != 'admin':
         flash('Admin only!', 'danger')
         return redirect(url_for('dashboard'))
-    city_filter = request.args.get('city', '').strip()
+    
     store_filter = request.args.get('store', '').strip()
     return render_template('producthistory.html', 
-                         city_filter=city_filter, 
                          store_filter=store_filter,
                          user=current_user)
 
@@ -1133,33 +1138,31 @@ def historysearch():
     sql = """
         SELECT s.dt as timestamp, 
                s.id as record_id,
-               s.store_id, 
-               st.store_name, 
-               c.city_name, 
-               s.product_id, 
-               p.product_name, 
+               st.storename as store_name, 
+               c.cityname as city_name, 
+               p.productname as product_name, 
                s.stock, 
                s.sale_amount,
                CASE 
-                   WHEN s.stock <= 5 THEN 'Low Stock'
-                   WHEN s.stock >= 40 THEN 'Overstock' 
-                   ELSE 'OK'
+                   WHEN s.stock <= 5 THEN '🔴 Low Stock'
+                   WHEN s.stock >= 40 THEN '🟡 Overstock' 
+                   ELSE '🟢 OK'
                END as stock_status
         FROM sales s 
-        JOIN store st ON s.store_id = st.store_id 
-        JOIN city c ON st.city_id = c.city_id 
-        JOIN product p ON s.product_id = p.product_id 
+        JOIN store st ON s.storeid = st.storeid 
+        JOIN city c ON st.cityid = c.cityid 
+        JOIN product p ON s.productid = p.productid 
         WHERE 1=1
     """
 
     if city:
-        sql += " AND c.city_name ILIKE %(city)s"
-        params['city'] = f'%{city}%'
+        sql += " AND LOWER(c.cityname) LIKE %(city)s"
+        params['city'] = f'%{city.lower()}%'
     if store:
-        sql += " AND st.store_name ILIKE %(store)s" 
-        params['store'] = f'%{store}%'
+        sql += " AND LOWER(st.storename) LIKE %(store)s"
+        params['store'] = f'%{store.lower()}%'
 
-    sql += " ORDER BY s.dt DESC LIMIT 100"
+    sql += " ORDER BY s.dt DESC LIMIT 10"  # Recent 10 only
 
     try:
         df = pd.read_sql(text(sql), engine, params=params)
@@ -1167,6 +1170,7 @@ def historysearch():
     except Exception as e:
         print(f"History search error: {e}")
         return jsonify({'error': str(e), 'status': 500})
+
 
 @app.route("/api/cities")
 def api_cities():
@@ -1258,31 +1262,85 @@ def ai_assistant():
             count = len(stores)
             response = f"🏪 {city_name.title()}: {count} Stores\n\n" + "\n".join([f"• {store}" for store in stores])
        
+       # PRODUCTS IN STORE - EXACT DASHBOARD QUERY!
         elif 'products in' in q:
-            store_name = q.split('products in', 1)[1].strip().strip('"')
-            store_products = []
-            for alert in all_alerts[-100:]:  # Last 100 alerts
-                if store_name.lower() in str(alert.get('store', '')).lower():
-                    store_products.append(alert.get('product', 'Unknown'))
-            store_products = list(set(store_products))[:10]  # Unique, top 10
-            count = len(store_products)
-            if count:
-                response = f"📦 **{store_name}: {count} Products**\n\n" + "\n".join([f"• {prod}" for prod in store_products])
+            store_name = q.split('products in', 1)[1].strip().strip('"').lower()
+            
+            # Get store ID first (exact match)
+            cursor.execute("SELECT storeid FROM store WHERE LOWER(storename) LIKE %s LIMIT 1", (f'%{store_name}%',))
+            store_row = cursor.fetchone()
+            if not store_row:
+                response = f"😔 Store '{store_name.title()}' not found\n\nTry: 'stores in pune'"
             else:
-                cursor.execute("SELECT productname FROM product LIMIT 10")
-                demo_products = [r[0] for r in cursor.fetchall()]
-                response = f"😔 No recent data for '{store_name}'\n\n📦 Sample products:\n" + "\n".join([f"• {p}" for p in demo_products])
-        
-        # RESTOCK SUMMARY
+                storeid = store_row[0]
+                
+                # EXACT storeproducts.html query!
+                cursor.execute("""
+                    SELECT DISTINCT p.productname, COALESCE(latest_stock.stock, 50) as stock,
+                        COALESCE(sales_sum.total_sales, 0) as total_sales,
+                        CASE 
+                            WHEN COALESCE(latest_stock.stock, 50) < 5 THEN 'Low Stock'
+                            WHEN COALESCE(latest_stock.stock, 50) > 40 THEN 'Overstock' 
+                            ELSE 'OK Stock'
+                        END as status
+                    FROM product p
+                    LEFT JOIN (
+                        SELECT storeid, productid, stock 
+                        FROM sales s1 
+                        WHERE storeid = %s AND s1.id = (
+                            SELECT MAX(s2.id) 
+                            FROM sales s2 
+                            WHERE s2.storeid = s1.storeid AND s2.productid = s1.productid
+                        )
+                    ) latest_stock ON p.productid = latest_stock.productid
+                    LEFT JOIN (
+                        SELECT productid, SUM(sale_amount) as total_sales 
+                        FROM sales 
+                        WHERE storeid = %s 
+                        GROUP BY productid
+                    ) sales_sum ON p.productid = sales_sum.productid
+                    ORDER BY total_sales DESC NULLS LAST
+                    LIMIT 20
+                """, (storeid, storeid))
+                
+                products = cursor.fetchall()
+                count = len(products)
+                
+                if count:
+                    response = f"📦 **{store_name.title()}: {count} Products**\n\n"
+                    for prod in products[:10]:
+                        name, stock, sales, status = prod
+                        status_emoji = "🔴" if "Low" in status else "🟡" if "Over" in status else "🟢"
+                        response += f"• {name} | Stock: {stock} | Sales: {sales} | {status_emoji} {status}\n"
+                    response += f"\n[Full List](/stores/{storeid}/products)"
+                else:
+                    response = f"📦 **{store_name.title()}: No sales data yet**\n\n✅ Store active - data coming soon!"
+
         elif 'restock' in q:
-            understock_count = len([a for a in all_alerts if "Restock Needed" in str(a.get('stock_alert', ''))])
-            overstock_count = len([a for a in all_alerts if "Overstock" in str(a.get('stock_alert', ''))])
-            okstock_count = len([a for a in all_alerts if "Stock OK" in str(a.get('stock_alert', ''))])
-            response = f"""⚠️ **Stock Summary:**
-            🔴 Understock: {understock_count}
-            🟡 Overstock: {overstock_count}
-            🟢 OK Stock: {okstock_count}
-            📊 Total: {len(all_alerts)} alerts"""
+            # EXACT dashboard() logic!
+            fresh_alerts = get_fresh_alerts_from_db(limit=1000)
+            
+            if current_user.role == 'store_manager':
+                user_storeid = current_user.storeid
+                combined_alerts = [a for a in fresh_alerts + all_alerts if a.get('storeid') == user_storeid]
+            else:
+                combined_alerts = fresh_alerts + all_alerts
+            
+            alerts = list(reversed(combined_alerts))[-200:]  # Exact dashboard filter
+            
+            understock_count = len([a for a in alerts if "Restock Needed" in str(a.get('stock_alert', ''))])
+            overstock_count = len([a for a in alerts if "Overstock" in str(a.get('stock_alert', ''))])
+            okstock_count = len([a for a in alerts if "Stock OK" in str(a.get('stock_alert', ''))])
+            
+            response = f"""⚠️ **Stock Summary (Dashboard Match):**
+        🔴 Understock: **{understock_count}**
+        🟡 Overstock: **{overstock_count}**
+        🟢 OK Stock: **{okstock_count}**
+        📊 Total Alerts: **{len(alerts)}**
+
+        [🔄 Refresh Dashboard](/)
+        [⚠️ Understock](/understock)
+        [📈 Overstock](/overstock)"""
 
         # NAVIGATION - AFTER ALL QUERIES
         elif 'dashboard' in q:
